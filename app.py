@@ -7,27 +7,92 @@ st.set_page_config(page_title="DataRecruit AI", page_icon="◈", layout="wide")
 # ── Minimal CSS ────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap');
+
+html, body, [class*="css"] {
+    font-family: 'IBM Plex Sans', sans-serif;
+    background-color: #0e0e0e;
+    color: #e8e8e8;
+}
+
+/* Hide Streamlit chrome */
 #MainMenu, footer, header { visibility: hidden; }
 .block-container { padding: 2.5rem 3rem 4rem; max-width: 1100px; }
-.divider { border: none; border-top: 1px solid #e0e0e0; margin: 1.5rem 0; }
 
-.metric-box { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 6px;
-              padding: 1rem 1.2rem; }
-.metric-num { font-size: 1.6rem; font-weight: 600; margin-bottom: 0.1rem; color: #111; }
-.metric-lbl { font-size: 0.75rem; color: #888; margin-top: 0.1rem; }
+h1 { font-family: 'IBM Plex Mono', monospace; font-size: 1.1rem; font-weight: 600;
+     letter-spacing: 0.15em; color: #c8f055; margin-bottom: 0; }
 
+.subtitle { font-size: 0.78rem; color: #555; letter-spacing: 0.08em;
+            font-family: 'IBM Plex Mono', monospace; margin-bottom: 2.5rem; }
+
+.divider { border: none; border-top: 1px solid #1e1e1e; margin: 2rem 0; }
+
+/* Desafio cards */
+.challenge-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.12em;
+    color: #c8f055;
+    text-transform: uppercase;
+    margin-bottom: 0.25rem;
+}
+.challenge-title {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: #e8e8e8;
+    margin-bottom: 0.2rem;
+}
+.challenge-desc {
+    font-size: 0.8rem;
+    color: #666;
+    margin-bottom: 1rem;
+}
+
+/* Result badge */
 .badge {
     display: inline-block;
-    font-size: 0.78rem;
-    background: #f4f4f4;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    padding: 0.2rem 0.6rem;
-    margin: 0.2rem 0.2rem 0.2rem 0;
-    color: #444;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    background: #141414;
+    border: 1px solid #2a2a2a;
+    border-radius: 3px;
+    padding: 0.18rem 0.55rem;
+    margin: 0.18rem 0.18rem 0.18rem 0;
+    color: #b0b0b0;
 }
-.badge-senior { border-color: #1a7f4b; color: #1a7f4b; background: #f0faf4; }
-.badge-junior { border-color: #ccc; color: #666; }
+.badge-senior {
+    border-color: #c8f055;
+    color: #c8f055;
+}
+.badge-junior {
+    border-color: #3a3a3a;
+    color: #777;
+}
+
+/* Dataframe override */
+.stDataFrame { border: 1px solid #1e1e1e; border-radius: 4px; }
+
+/* Expander */
+.st-expander { border: 1px solid #1e1e1e !important; border-radius: 4px !important;
+               background: #0e0e0e !important; }
+
+/* Metrics */
+.metric-box { background: #111; border: 1px solid #1e1e1e; border-radius: 4px;
+              padding: 1rem 1.2rem; }
+.metric-num { font-family: 'IBM Plex Mono', monospace; font-size: 1.6rem;
+              color: #c8f055; font-weight: 600; }
+.metric-lbl { font-size: 0.72rem; color: #555; letter-spacing: 0.06em; margin-top: 0.1rem; }
+
+/* Tabs */
+button[data-baseweb="tab"] {
+    font-family: 'IBM Plex Mono', monospace !important;
+    font-size: 0.75rem !important;
+    letter-spacing: 0.08em !important;
+    color: #555 !important;
+}
+button[data-baseweb="tab"][aria-selected="true"] { color: #c8f055 !important; }
+[data-baseweb="tab-highlight"] { background-color: #c8f055 !important; }
+[data-baseweb="tab-border"] { background-color: #1e1e1e !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -70,8 +135,8 @@ d3 = df[(df["Idade"] < 25) & ((df["Técnico"] == True) | (df["Exp"] >= 1))]
 df["Categoria"] = df["Exp"].apply(lambda x: "SÊNIOR" if x > 5 else "JÚNIOR")
 
 # ── Header ─────────────────────────────────────────────────────────────────────
-st.title("DataRecruit AI")
-st.caption("Algoritmo de Seleção Inteligente — Lógica para Computação")
+st.markdown('<h1>◈ DATARECRUIT AI</h1>', unsafe_allow_html=True)
+st.markdown('<div class="subtitle">ALGORITMO DE SELEÇÃO INTELIGENTE — LÓGICA PARA COMPUTAÇÃO</div>', unsafe_allow_html=True)
 
 # ── Métricas ───────────────────────────────────────────────────────────────────
 c1, c2, c3, c4, c5 = st.columns(5)
@@ -84,21 +149,16 @@ metrics = [
 ]
 for col, (num, lbl) in zip([c1, c2, c3, c4, c5], metrics):
     with col:
-        st.markdown(
-            f'<div class="metric-box">'
-            f'<div class="metric-num">{num}</div>'
-            f'<div class="metric-lbl">{lbl}</div>'
-            f'</div>',
-            unsafe_allow_html=True
-        )
+        st.markdown(f'<div class="metric-box"><div class="metric-num">{num}</div><div class="metric-lbl">{lbl}</div></div>', unsafe_allow_html=True)
 
 st.markdown('<hr class="divider">', unsafe_allow_html=True)
 
 # ── Tabs ───────────────────────────────────────────────────────────────────────
 tab_dataset, tab1, tab2, tab3, tab4 = st.tabs([
-    "Dataset", "Desafio 1", "Desafio 2", "Desafio 3", "Desafio 4"
+    "DATASET", "DESAFIO 1", "DESAFIO 2", "DESAFIO 3", "DESAFIO 4"
 ])
 
+# helper para exibir tabela limpa
 def show_table(frame, extra_cols=None):
     display_cols = ["ID", "Nome", "Idade", "Exp", "Técnico", "Inglês"]
     if extra_cols:
@@ -110,16 +170,18 @@ def show_table(frame, extra_cols=None):
 
 # ── Dataset ────────────────────────────────────────────────────────────────────
 with tab_dataset:
-    st.subheader("50 Candidatos")
-    st.caption("Dados brutos utilizados em todos os desafios.")
+    st.markdown('<div class="challenge-label">base de dados</div>', unsafe_allow_html=True)
+    st.markdown('<div class="challenge-title">50 Candidatos</div>', unsafe_allow_html=True)
+    st.markdown('<div class="challenge-desc">Dados brutos utilizados em todos os desafios.</div>', unsafe_allow_html=True)
     show_table(df)
 
 # ── Desafio 1 ──────────────────────────────────────────────────────────────────
 with tab1:
-    st.subheader("Triagem de Qualificação Técnica")
-    st.caption("Operador **E** — Maioridade legal (idade ≥ 18) **e** curso técnico completo.")
+    st.markdown('<div class="challenge-label">desafio 1 — operador E (and)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="challenge-title">Triagem de Qualificação Técnica</div>', unsafe_allow_html=True)
+    st.markdown('<div class="challenge-desc">Maioridade legal (idade ≥ 18) <b>E</b> curso técnico completo.</div>', unsafe_allow_html=True)
 
-    with st.expander("Ver código", expanded=True):
+    with st.expander("ver código"):
         st.code(
             "aprovados_d1 = [\n"
             "    c for c in candidatos\n"
@@ -132,10 +194,11 @@ with tab1:
 
 # ── Desafio 2 ──────────────────────────────────────────────────────────────────
 with tab2:
-    st.subheader("Expansão de Talentos Internacionais")
-    st.caption("Operador **OU** — Experiência ≥ 3 anos **ou** domínio da língua inglesa.")
+    st.markdown('<div class="challenge-label">desafio 2 — operador OU (or)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="challenge-title">Expansão de Talentos Internacionais</div>', unsafe_allow_html=True)
+    st.markdown('<div class="challenge-desc">Experiência ≥ 3 anos <b>OU</b> domínio da língua inglesa.</div>', unsafe_allow_html=True)
 
-    with st.expander("Ver código", expanded=True):
+    with st.expander("ver código"):
         st.code(
             "aprovados_d2 = [\n"
             "    c for c in candidatos\n"
@@ -148,10 +211,11 @@ with tab2:
 
 # ── Desafio 3 ──────────────────────────────────────────────────────────────────
 with tab3:
-    st.subheader("Filtro de Potencial Jovem")
-    st.caption("Lógica combinada — Idade < 25 **e** (técnico completo **ou** experiência ≥ 1 ano).")
+    st.markdown('<div class="challenge-label">desafio 3 — lógica combinada</div>', unsafe_allow_html=True)
+    st.markdown('<div class="challenge-title">Filtro de Potencial Jovem</div>', unsafe_allow_html=True)
+    st.markdown('<div class="challenge-desc">Idade &lt; 25 <b>E</b> (técnico completo <b>OU</b> experiência ≥ 1 ano).</div>', unsafe_allow_html=True)
 
-    with st.expander("Ver código", expanded=True):
+    with st.expander("ver código"):
         st.code(
             "aprovados_d3 = [\n"
             "    c for c in candidatos\n"
@@ -165,10 +229,11 @@ with tab3:
 
 # ── Desafio 4 ──────────────────────────────────────────────────────────────────
 with tab4:
-    st.subheader("Classificação Salarial")
-    st.caption("Operação condicional — Experiência > 5 anos → **SÊNIOR**, caso contrário → **JÚNIOR**.")
+    st.markdown('<div class="challenge-label">desafio 4 — operação condicional</div>', unsafe_allow_html=True)
+    st.markdown('<div class="challenge-title">Classificação Salarial</div>', unsafe_allow_html=True)
+    st.markdown('<div class="challenge-desc">Experiência &gt; 5 anos → <b>SÊNIOR</b>, caso contrário → <b>JÚNIOR</b>.</div>', unsafe_allow_html=True)
 
-    with st.expander("Ver código", expanded=True):
+    with st.expander("ver código"):
         st.code(
             'for c in candidatos:\n'
             '    categoria = "SÊNIOR" if c["exp"] > 5 else "JÚNIOR"\n'
@@ -177,21 +242,16 @@ with tab4:
         )
 
     col_s, col_j = st.columns(2)
+
     senior = df[df["Categoria"] == "SÊNIOR"]
     junior = df[df["Categoria"] == "JÚNIOR"]
 
     with col_s:
-        st.markdown(f"**Sênior — {len(senior)} candidatos**")
+        st.markdown(f'<div class="challenge-label">sênior — {len(senior)} candidatos</div>', unsafe_allow_html=True)
         for _, row in senior.iterrows():
-            st.markdown(
-                f'<span class="badge badge-senior">#{row["ID"]:02d} {row["Nome"]} · {row["Exp"]}a</span>',
-                unsafe_allow_html=True
-            )
+            st.markdown(f'<span class="badge badge-senior">#{row["ID"]:02d} {row["Nome"]} · {row["Exp"]}a</span>', unsafe_allow_html=True)
 
     with col_j:
-        st.markdown(f"**Júnior — {len(junior)} candidatos**")
+        st.markdown(f'<div class="challenge-label">júnior — {len(junior)} candidatos</div>', unsafe_allow_html=True)
         for _, row in junior.iterrows():
-            st.markdown(
-                f'<span class="badge badge-junior">#{row["ID"]:02d} {row["Nome"]} · {row["Exp"]}a</span>',
-                unsafe_allow_html=True
-            )
+            st.markdown(f'<span class="badge badge-junior">#{row["ID"]:02d} {row["Nome"]} · {row["Exp"]}a</span>', unsafe_allow_html=True)
