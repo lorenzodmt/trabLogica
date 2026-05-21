@@ -11,7 +11,7 @@ st.markdown("""
 .block-container { padding: 2.5rem 3rem 4rem; max-width: 1100px; }
 .divider { border: none; border-top: 1px solid #e0e0e0; margin: 1.5rem 0; }
 
-.metric-box { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 6px;
+.metric-box { background: linear-gradient(135deg, #e8f0fe 0%, #ede7f6 100%); border: 1px solid #d0d8f0; border-radius: 6px;
               padding: 1rem 1.2rem; }
 .metric-num { font-size: 1.6rem; font-weight: 600; margin-bottom: 0.1rem; color: #111; }
 .metric-lbl { font-size: 0.75rem; color: #888; margin-top: 0.1rem; }
