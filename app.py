@@ -15,17 +15,17 @@ class MotorLogico:
         ]
 
     def normalizar_expressao(self, expressao: str) -> str:
-        """Converte todas as variáveis proposicionais para maiúsculas para evitar duplicidade."""
+        """Converte todas as variáveis proposicionais para maiúsculas e remove espaços extras."""
         # Encontra letras isoladas e as transforma em maiúsculas
-        return re.sub(r'\b[a-z]\b', lambda m: m.group(0).upper(), expressao)
+        expr = re.sub(r'\b[a-z]\b', lambda m: m.group(0).upper(), expressao)
+        # Remove espaços desnecessários para facilitar o casamento de padrões
+        return "".join(expr.split())
 
     def extrair_variaveis(self, expressoes: list) -> list:
         """Extrai todas as variáveis proposicionais (letras isoladas, maiúsculas ou minúsculas)."""
         variaveis = set()
         for expr in expressoes:
-            # Aceita letras de 'a' a 'z' (minúsculas) e 'A' a 'Z' (maiúsculas)
             encontradas = re.findall(r'\b[a-zA-Z]\b', expr)
-            # Padroniza tudo em maiúsculo no conjunto para evitar 'p' e 'P' duplicados
             variaveis.update([v.upper() for v in encontradas])
         return sorted(list(variaveis))
 
@@ -69,7 +69,6 @@ class MotorLogico:
             if res1 != res2:
                 equivalentes = False
 
-            # Exibe os cabeçalhos das expressões de forma normalizada (maiúsculas)
             linha = {v: self.formatar_booleano(contexto[v]) for v in variaveis}
             linha[self.normalizar_expressao(expr1)] = self.formatar_booleano(res1)
             linha[self.normalizar_expressao(expr2)] = self.formatar_booleano(res2)
@@ -77,6 +76,95 @@ class MotorLogico:
 
         df = pd.DataFrame(linhas_tabela)
         return df, equivalentes
+
+    # --- MOTOR DE RECONHECIMENTO DE PADRÕES (EXPLICAÇÃO) ---
+    def explicar_argumento(self, premissas: list, conclusao: str, eh_valido: bool) -> str:
+        """Analisa a estrutura das premissas e conclusão para identificar e explicar a regra aplicada."""
+        p_norm = [self.normalizar_expressao(p) for p in premissas]
+        c_norm = self.normalizar_expressao(conclusao)
+        
+        # Cria um conjunto das premissas para facilitar buscas de ordem independente
+        p_set = set(p_norm)
+
+        if eh_valido:
+            # 1. Tenta identificar MODUS PONENS
+            # Padrão: Se tivermos uma condicional (A->B) e a afirmação do antecedente (A), a conclusão deve ser B.
+            for p in p_norm:
+                if "->" in p and "<->" not in p:
+                    antecedente, consequente = p.split("->", 1)
+                    if antecedente in p_set and c_norm == consequente:
+                        return f"**Regra identificada:** Modus Ponens (Afirmação do Antecedente).\n\n" \
+                               f"**Por que é válido?** A estrutura lógica diz que sempre que a regra `{antecedente} -> {consequente}` for verdadeira, " \
+                               f"e o fato `{antecedente}` ocorrer isoladamente, o resultado `{consequente}` obrigatoriamente acontecerá."
+
+            # 2. Tenta identificar MODUS TOLLENS
+            # Padrão: Se tivermos uma condicional (A->B) e a negação do consequente (~B), a conclusão deve ser ~A.
+            for p in p_norm:
+                if "->" in p and "<->" not in p:
+                    antecedente, consequente = p.split("->", 1)
+                    neg_consequente = f"~{consequente}" if not consequente.startswith("~") else consequente[1:]
+                    neg_antecedente = f"~{antecedente}" if not antecedente.startswith("~") else antecedente[1:]
+                    
+                    if neg_consequente in p_set and c_norm == neg_antecedente:
+                        return f"**Regra identificada:** Modus Tollens (Negação do Consequente).\n\n" \
+                               f"**Por que é válido?** A regra diz que `{antecedente}` implica em `{consequente}`. Como a premissa informa " \
+                               f"que `{consequente}` não aconteceu (`{neg_consequente}`), conclui-se de forma legítima que o seu causador também não ocorreu (`{neg_antecedente}`)."
+
+            # 3. Tenta identificar SILOGISMO HIPOTÉTICO
+            # Padrão: Se A->B e B->C, então A->C.
+            for p1 in p_norm:
+                if "->" in p1 and "<->" not in p1:
+                    a, b = p1.split("->", 1)
+                    for p2 in p_norm:
+                        if "->" in p2 and "<->" not in p2 and p1 != p2:
+                            b2, c = p2.split("->", 1)
+                            if b == b2 and c_norm == f"{a}->{c}":
+                                return f"**Regra identificada:** Silogismo Hipotético (Regra da Cadeia).\n\n" \
+                                       f"**Por que é válido?** Há um encadeamento lógico de causa e efeito. Se `{a}` leva a `{b}` e `{b}` leva a `{c}`, " \
+                                       f"estabelece-se uma relação direta de que `{a}` causará `{c}`."
+
+            # 4. Tenta identificar SILOGISMO DISJUNTIVO
+            # Padrão: Se A|B e tivermos ~A, a conclusão é B (ou vice-versa).
+            for p in p_norm:
+                if "|" in p:
+                    partes = p.split("|")
+                    if len(partes) == 2:
+                        a, b = partes[0], partes[1]
+                        neg_a = f"~{a}" if not a.startswith("~") else a[1:]
+                        neg_b = f"~{b}" if not b.startswith("~") else b[1:]
+                        
+                        if (neg_a in p_set and c_norm == b) or (neg_b in p_set and c_norm == a):
+                            return f"**Regra identificada:** Silogismo Disjuntivo (Eliminação por Alternativa).\n\n" \
+                                   f"**Por que é válido?** A premissa inicial garante que pelo menos uma das opções é verdadeira (`{a}` ou `{b}`). " \
+                                   f"Ao eliminar uma das alternativas através da outra premissa, resta obrigatoriamente aceitar a outra como verdade."
+
+            return "**Regra identificada:** Dedução Válida Geral.\n\n" \
+                   "**Por que é válido?** Embora este argumento não se encaixe perfeitamente em um único nome de silogismo simples clássico, " \
+                   "a análise matemática da tabela-verdade provou que em todas as situações onde todas as suas premissas são Verdadeiras, " \
+                   "a sua conclusão também se manteve Verdadeira."
+        else:
+            # Tratamento didático para Falácias (Argumentos Inválidos)
+            for p in p_norm:
+                if "->" in p and "<->" not in p:
+                    antecedente, consequente = p.split("->", 1)
+                    
+                    # Falácia da Afirmação do Consequente (Ex: P->Q, Q. Conclusão: P)
+                    if consequente in p_set and c_norm == antecedente:
+                        return f"**Falácia Identificada:** Afirmação do Consequente.\n\n" \
+                               f"**Por que é inválido?** É um erro comum deduzir que o efeito só possui uma causa única. Mesmo que `{antecedente} -> {consequente}` seja verdade, " \
+                               f"saber que `{consequente}` aconteceu não prova que ele foi causado especificamente por `{antecedente}` (outros fatores não mapeados poderiam gerar `{consequente}`)."
+                    
+                    # Falácia da Negação do Antecedente (Ex: P->Q, ~P. Conclusão: ~Q)
+                    neg_antecedente = f"~{antecedente}" if not antecedente.startswith("~") else antecedente[1:]
+                    neg_consequente = f"~{consequente}" if not consequente.startswith("~") else consequente[1:]
+                    if neg_antecedente in p_set and c_norm == neg_consequente:
+                        return f"**Falácia Identificada:** Negação do Antecedente.\n\n" \
+                               f"**Por que é inválido?** Dizer que `{antecedente}` causa `{consequente}` não significa que `{antecedente}` seja a *única* forma de gerar `{consequente}`. " \
+                               f"Portanto, o fato de `{antecedente}` não ter acontecido (`{neg_antecedente}`) não impede que `{consequente}` aconteça por outros caminhos."
+
+            return "**Falácia Identificada:** Falácia Lógica Geral.\n\n" \
+                   "**Por que é inválido?** A análise computacional detectou linhas críticas (sinalizadas abaixo) onde todas as premissas " \
+                   "inseridas conseguem ser Verdadeiras (V) ao mesmo tempo em que a sua conclusão resulta em Falsa (F). Isso quebra a consistência do argumento."
 
     # --- PROCESSAMENTO PARA O MÓDULO C ---
     def processar_argumento(self, premissas: list, conclusao: str):
@@ -110,7 +198,9 @@ class MotorLogico:
             linhas_tabela.append(linha)
 
         df = pd.DataFrame(linhas_tabela)
-        return df, argumento_valido
+        explicao_didatica = self.explicar_argumento(premissas, conclusao, argumento_valido)
+        
+        return df, argumento_valido, explicao_didatica
 
 
 # =====================================================================
@@ -133,7 +223,7 @@ Use a seguinte sintaxe para as expressões:
 * **Disjunção (OU):** `p | q`
 * **Condicional:** `p -> q`
 * **Bicondicional:** `p <-> q`
-* *Agora você pode utilizar tanto letras **minúsculas** quanto **maiúsculas** para as variáveis!*
+* *Você pode utilizar tanto letras **minúsculas** quanto **maiúsculas** para as variáveis!*
 """)
 
 motor = MotorLogico()
@@ -160,13 +250,11 @@ with tab_equiv:
             try:
                 df_resultado, sao_equivalentes = motor.processar_equivalencia(e1, e2)
                 
-                # Exibição do Veredito
                 if sao_equivalentes:
                     st.success("### 🟩 Resposta: Expressões LOGICAMENTE EQUIVALENTES")
                 else:
                     st.error("### 🟥 Resposta: Expressões NÃO SÃO EQUIVALENTES")
                 
-                # Renderização da Tabela Verdade Completa
                 st.write("#### Tabela-Verdade Gerada:")
                 st.dataframe(df_resultado, use_container_width=True)
                 
@@ -177,8 +265,8 @@ with tab_equiv:
 
 # --- ABA: MOTOR DE INFERÊNCIA ---
 with tab_inferencia:
-    st.header("Validador de Argumentos Lógicos")
-    st.write("Defina um conjunto de premissas e veja se a conclusão decorre logicamente delas.")
+    st.header("Validador de Argumentos Lógicos com Explicação Didática")
+    st.write("Defina um conjunto de premissas e veja se a conclusão decorre logicamente delas, acompanhado do diagnóstico conceitual.")
 
     # Controle dinâmico do número de premissas usando a sessão do Streamlit
     if 'num_premissas' not in st.session_state:
@@ -196,7 +284,6 @@ with tab_inferencia:
     premissas_inputs = []
     st.write("#### Premissas:")
     
-    # Valores default demonstrativos em minúsculas (Modus Ponens)
     defaults_premissas = ["p -> q", "p"]
     
     for i in range(st.session_state.num_premissas):
@@ -211,13 +298,15 @@ with tab_inferencia:
     if st.button("Avaliar Validade do Argumento", key="btn_infer"):
         if premissas_inputs and conclusao_input:
             try:
-                df_argumento, eh_valido = motor.processar_argumento(premissas_inputs, conclusao_input)
+                df_argumento, eh_valido, explicacao = motor.processar_argumento(premissas_inputs, conclusao_input)
                 
                 if eh_valido:
                     st.success("### 🟩 Veredito: O argumento é VÁLIDO (Dedução Legítima)")
                 else:
                     st.error("### 🟥 Veredito: O argumento é INVÁLIDO (Falácia Lógica)")
-                    st.info("💡 Uma falácia ocorre quando todas as premissas são Verdadeiras (V), mas a conclusão é Falsa (F). Veja as linhas sinalizadas na tabela abaixo.")
+                
+                # Renderiza a caixa com a explicação teórica do Silogismo/Argumento
+                st.info(explicacao)
 
                 st.write("#### Análise da Tabela-Verdade do Argumento:")
                 st.dataframe(df_argumento, use_container_width=True)
