@@ -8,7 +8,7 @@ class MotorLogico:
         # Mapeamento de conectivos para operadores válidos do Python
         self.REPLACEMENTS = [
             ('<->', '=='),
-            ('->', ' <= '),  # P -> Q é equivalente a P <= Q em lógica booleana no Python
+            ('->', ' <= '),  # P -> Q é equivalente a P <= Q em lógica booleana no Python [cite: 27, 28]
             ('~', ' not '),
             ('&', ' and '),
             ('|', ' or ')
@@ -37,18 +37,18 @@ class MotorLogico:
         return expr_traduzida
 
     def avaliar_linha(self, expressao_preparada: str, contexto: dict) -> bool:
-        """Avalia o valor-verdade de uma expressão usando o eval nativo."""
+        """Avalia o valor-verdade de uma expressão usando o eval nativo[cite: 41, 43]."""
         try:
             return bool(eval(expressao_preparada, {}, contexto))
         except Exception as e:
             raise SyntaxError(f"Erro de sintaxe na expressão. Verifique os parênteses e conectivos.")
 
     def gerar_combinacoes(self, variaveis: list) -> list:
-        """Gera a árvore de possibilidades binárias (True/False)."""
+        """Gera a árvore de possibilidades binárias (True/False)[cite: 31, 42]."""
         return list(itertools.product([True, False], repeat=len(variaveis)))
 
     def formatar_booleano(self, valor: bool) -> str:
-        """Mapeia True/False para V/F para exibição acadêmica."""
+        """Mapeia True/False para V/F para exibição acadêmica[cite: 32]."""
         return 'V' if valor else 'F'
 
     # --- PROCESSAMENTO PARA O MÓDULO B ---
@@ -94,7 +94,7 @@ class MotorLogico:
             valores_premissas = [self.avaliar_linha(p, contexto) for p in premissas_prep]
             valor_conclusao = self.avaliar_linha(conclusao_prep, contexto)
 
-            # Um argumento é inválido se as premissas forem V e a conclusão for F
+            # Um argumento é inválido se as premissas forem V e a conclusão for F [cite: 39]
             eh_falacia_na_linha = all(valores_premissas) and not valor_conclusao
             if eh_falacia_na_linha:
                 argumento_valido = False
@@ -117,57 +117,57 @@ class MotorLogico:
 #                         INTERFACE STREAMLIT
 # =====================================================================
 
-st.set_page_config(page_title="Motor Lógico - UFN", page_icon="🧠", layout="wide")
+st.set_page_config(page_title="Motor Lógico - UFN", page_icon="🧠", layout="wide") [cite: 1, 2]
 
-st.title("🧠 Protótipo de Motor Lógico em Python")
+st.title("🧠 Protótipo de Motor Lógico em Python") [cite: 9, 14]
 st.markdown("""
 Mapeamento de Tabelas-Verdade, Equivalências e Motores de Inferência Aplicados à IA.  
-*Desenvolvido para a disciplina de Lógica para Computação (Prof. Leandro Ribeiro Fontoura).*
+*Desenvolvido para a disciplina de Lógica para Computação (Prof. Leandro Ribeiro Fontoura).* [cite: 5, 6, 10]
 """)
 
-st.sidebar.header("Guia de Conectivos")
+st.sidebar.header("Guia de Conectivos") [cite: 23]
 st.sidebar.markdown("""
 Use a seguinte sintaxe para as expressões:
-* **Negação:** `~p`
-* **Conjunção (E):** `p & q`
-* **Disjunção (OU):** `p | q`
-* **Condicional:** `p -> q`
-* **Bicondicional:** `p <-> q`
+* **Negação:** `~p` [cite: 24]
+* **Conjunção (E):** `p & q` [cite: 25]
+* **Disjunção (OU):** `p | q` [cite: 26]
+* **Condicional:** `p -> q` [cite: 27]
+* **Bicondicional:** `p <-> q` [cite: 28]
 * *Agora você pode utilizar tanto letras **minúsculas** quanto **maiúsculas** para as variáveis!*
 """)
 
 motor = MotorLogico()
 
-# Criação das abas para organização do Trabalho Prático
+# Criação das abas para organização do Trabalho Prático [cite: 17]
 tab_equiv, tab_inferencia = st.tabs([
-    "Módulo B: Provador de Equivalência",
-    "Módulo C: Motor de Inferência (Validador)"
+    "Módulo B: Provador de Equivalência", [cite: 29]
+    "Módulo C: Motor de Inferência (Validador)" [cite: 37]
 ])
 
 # --- ABA: PROVADOR DE EQUIVALÊNCIA ---
 with tab_equiv:
-    st.header("Verificador de Equivalência Lógica")
-    st.write("Insira duas expressões para verificar se elas possuem tabelas-verdade idênticas (Ex: Leis de De Morgan).")
+    st.header("Verificador de Equivalência Lógica") [cite: 29]
+    st.write("Insira duas expressões para verificar se elas possuem tabelas-verdade idênticas (Ex: Leis de De Morgan).") [cite: 30, 33]
     
     col1, col2 = st.columns(2)
     with col1:
-        e1 = st.text_input("Primeira Expressão (Entrada 1):", value="~(p & q)")
+        e1 = st.text_input("Primeira Expressão (Entrada 1):", value="~(p & q)") [cite: 34]
     with col2:
-        e2 = st.text_input("Segunda Expressão (Entrada 2):", value="~p | ~q")
+        e2 = st.text_input("Segunda Expressão (Entrada 2):", value="~p | ~q") [cite: 35]
 
     if st.button("Calcular Equivalência", key="btn_equiv"):
         if e1 and e2:
             try:
                 df_resultado, sao_equivalentes = motor.processar_equivalencia(e1, e2)
                 
-                # Exibição do Veredito
+                # Exibição do Veredito [cite: 32]
                 if sao_equivalentes:
-                    st.success("### 🟩 Resposta: Expressões LOGICAMENTE EQUIVALENTES")
+                    st.success("### 🟩 Resposta: Expressões LOGICAMENTE EQUIVALENTES") [cite: 36]
                 else:
                     st.error("### 🟥 Resposta: Expressões NÃO SÃO EQUIVALENTES")
                 
                 # Renderização da Tabela Verdade Completa
-                st.write("#### Tabela-Verdade Gerada:")
+                st.write("#### Tabela-Verdade Gerada:") [cite: 32]
                 st.dataframe(df_resultado, use_container_width=True)
                 
             except Exception as e:
@@ -177,8 +177,8 @@ with tab_equiv:
 
 # --- ABA: MOTOR DE INFERÊNCIA ---
 with tab_inferencia:
-    st.header("Validador de Argumentos Lógicos")
-    st.write("Defina um conjunto de premissas e veja se a conclusão decorre logicamente delas.")
+    st.header("Validador de Argumentos Lógicos") [cite: 37]
+    st.write("Defina um conjunto de premissas e veja se a conclusão decorre logicamente delas.") [cite: 38]
 
     # Controle dinâmico do número de premissas usando a sessão do Streamlit
     if 'num_premissas' not in st.session_state:
@@ -194,9 +194,9 @@ with tab_inferencia:
 
     # Inputs das premissas dinâmicas
     premissas_inputs = []
-    st.write("#### Premissas:")
+    st.write("#### Premissas:") [cite: 38]
     
-    # Valores default demonstrativos em minúsculas (Modus Ponens)
+    # Valores default demonstrativos em minúsculas (Modus Ponens) [cite: 47]
     defaults_premissas = ["p -> q", "p"]
     
     for i in range(st.session_state.num_premissas):
@@ -205,8 +205,8 @@ with tab_inferencia:
         if p_in:
             premissas_inputs.append(p_in)
 
-    st.write("#### Conclusão:")
-    conclusao_input = st.text_input("Conclusão do Argumento:", value="q", key="conclusao")
+    st.write("#### Conclusão:") [cite: 38]
+    conclusao_input = st.text_input("Conclusão do Argumento:", value="q", key="conclusao") [cite: 38]
 
     if st.button("Avaliar Validade do Argumento", key="btn_infer"):
         if premissas_inputs and conclusao_input:
@@ -214,6 +214,15 @@ with tab_inferencia:
                 df_argumento, eh_valido = motor.processar_argumento(premissas_inputs, conclusao_input)
                 
                 if eh_valido:
-                    st.success("### 🟩 Veredito: O argumento é VÁLIDO (Dedução Legítima)")
+                    st.success("### 🟩 Veredito: O argumento é VÁLIDO (Dedução Legítima)") [cite: 39]
                 else:
-                    st.error("### 🟥 Veredito: O argumento é INVÁLIDO (Falácia Lógica)")
+                    st.error("### 🟥 Veredito: O argumento é INVÁLIDO (Falácia Lógica)") [cite: 39]
+                    st.info("💡 Uma falácia ocorre quando todas as premissas são Verdadeiras (V), mas a conclusão é Falsa (F). Veja as linhas sinalizadas na tabela abaixo.") [cite: 39]
+
+                st.write("#### Análise da Tabela-Verdade do Argumento:") [cite: 39]
+                st.dataframe(df_argumento, use_container_width=True)
+                
+            except Exception as e:
+                st.error(f"Erro ao processar o argumento: {e}")
+        else:
+            st.warning("Certifique-se de preencher as premissas e a conclusão.")
