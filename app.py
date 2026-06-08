@@ -1,197 +1,219 @@
 import streamlit as st
 import pandas as pd
+import itertools
+import re
 
-# ── Page config ────────────────────────────────────────────────────────────────
-st.set_page_config(page_title="DataRecruit AI", page_icon="◈", layout="wide")
+class MotorLogico:
+    def __init__(self):
+        # Mapeamento de conectivos para operadores válidos do Python
+        self.REPLACEMENTS = [
+            ('<->', '=='),
+            ('->', ' <= '),  # P -> Q é equivalente a P <= Q em lógica booleana no Python
+            ('~', ' not '),
+            ('&', ' and '),
+            ('|', ' or ')
+        ]
 
-# ── Minimal CSS ────────────────────────────────────────────────────────────────
+    def normalizar_expressao(self, expressao: str) -> str:
+        """Converte todas as variáveis proposicionais para maiúsculas para evitar duplicidade."""
+        # Encontra letras isoladas e as transforma em maiúsculas
+        return re.sub(r'\b[a-z]\b', lambda m: m.group(0).upper(), expressao)
+
+    def extrair_variaveis(self, expressoes: list) -> list:
+        """Extrai todas as variáveis proposicionais (letras isoladas, maiúsculas ou minúsculas)."""
+        variaveis = set()
+        for expr in expressoes:
+            # Modificado para aceitar letras de 'a' a 'z' (minúsculas) e 'A' a 'Z' (maiúsculas)
+            encontradas = re.findall(r'\b[a-zA-Z]\b', expr)
+            # Padroniza tudo em maiúsculo no conjunto para evitar 'p' e 'P' duplicados
+            variaveis.update([v.upper() for v in encontradas])
+        return sorted(list(variaveis))
+
+    def preparar_expressao(self, expressao: str) -> str:
+        """Traduz a expressão normalizada para a sintaxe do Python."""
+        expr_traduzida = self.normalizar_expressao(expressao)
+        for logico, python in self.REPLACEMENTS:
+            expr_traduzida = expr_traduzida.replace(logico, python)
+        return expr_traduzida
+
+    def avaliar_linha(self, expressao_preparada: str, contexto: dict) -> bool:
+        """Avalia o valor-verdade de uma expressão usando o eval nativo."""
+        try:
+            return bool(eval(expressao_preparada, {}, contexto))
+        except Exception as e:
+            raise SyntaxError(f"Erro de sintaxe na expressão. Verifique os parênteses e conectivos.")
+
+    def gerar_combinacoes(self, variaveis: list) -> list:
+        """Gera a árvore de possibilidades binárias (True/False)."""
+        return list(itertools.product([True, False], repeat=len(variaveis)))
+
+    def formatar_booleano(self, valor: bool) -> str:
+        """Mapeia True/False para V/F para exibição acadêmica."""
+        return 'V' if valor else 'F'
+
+    # --- PROCESSAMENTO PARA O MÓDULO B ---
+    def processar_equivalencia(self, expr1: str, expr2: str):
+        variaveis = self.extrair_variaveis([expr1, expr2])
+        expr1_prep = self.preparar_expressao(expr1)
+        expr2_prep = self.preparar_expressao(expr2)
+        combinacoes = self.gerar_combinacoes(variaveis)
+
+        linhas_tabela = []
+        equivalentes = True
+
+        for combo in combinacoes:
+            contexto = dict(zip(variaveis, combo))
+            res1 = self.avaliar_linha(expr1_prep, contexto)
+            res2 = self.avaliar_linha(expr2_prep, contexto)
+
+            if res1 != res2:
+                equivalentes = False
+
+            # Exibe os cabeçalhos das expressões de forma normalizada (maiúsculas)
+            linha = {v: self.formatar_booleano(contexto[v]) for v in variaveis}
+            linha[self.normalizar_expressao(expr1)] = self.formatar_booleano(res1)
+            linha[self.normalizar_expressao(expr2)] = self.formatar_booleano(res2)
+            linhas_tabela.append(linha)
+
+        df = pd.DataFrame(linhas_tabela)
+        return df, equivalentes
+
+    # --- PROCESSAMENTO PARA O MÓDULO C ---
+    def processar_argumento(self, premissas: list, conclusao: str):
+        todas_expressoes = premissas + [conclusao]
+        variaveis = self.extrair_variaveis(todas_expressoes)
+        premissas_prep = [self.preparar_expressao(p) for p in premissas]
+        conclusao_prep = self.preparar_expressao(conclusao)
+        combinacoes = self.gerar_combinacoes(variaveis)
+
+        linhas_tabela = []
+        argumento_valido = True
+
+        for combo in combinacoes:
+            contexto = dict(zip(variaveis, combo))
+            valores_premissas = [self.avaliar_linha(p, contexto) for p in premissas_prep]
+            valor_conclusao = self.avaliar_linha(conclusao_prep, contexto)
+
+            # Um argumento é inválido se as premissas forem V e a conclusão for F
+            eh_falacia_na_linha = all(valores_premissas) and not valor_conclusao
+            if eh_falacia_na_linha:
+                argumento_valido = False
+
+            linha = {v: self.formatar_booleano(contexto[v]) for v in variaveis}
+            for i, p_val in enumerate(valores_premissas):
+                p_nome_norm = self.normalizar_expressao(premissas[i])
+                linha[f"Premissa {i+1} ({p_nome_norm})"] = self.formatar_booleano(p_val)
+            
+            c_nome_norm = self.normalizar_expressao(conclusao)
+            linha[f"Conclusão ({c_nome_norm})"] = self.formatar_booleano(valor_conclusao)
+            linha["Validação"] = "❌ FALÁCIA" if eh_falacia_na_linha else "✅ OK"
+            linhas_tabela.append(linha)
+
+        df = pd.DataFrame(linhas_tabela)
+        return df, argumento_valido
+
+
+# =====================================================================
+#                         INTERFACE STREAMLIT
+# =====================================================================
+
+st.set_page_config(page_title="Motor Lógico - UFN", page_icon="🧠", layout="wide")
+
+st.title("🧠 Protótipo de Motor Lógico em Python")
 st.markdown("""
-<style>
-#MainMenu, footer, header { visibility: hidden; }
-.block-container { padding: 2.5rem 3rem 4rem; max-width: 1100px; }
-.divider { border: none; border-top: 1px solid #e0e0e0; margin: 1.5rem 0; }
+Mapeamento de Tabelas-Verdade, Equivalências e Motores de Inferência Aplicados à IA.  
+*Desenvolvido para a disciplina de Lógica para Computação (Prof. Leandro Ribeiro Fontoura).*
+""")
 
-.metric-box { background: linear-gradient(135deg, #e8f0fe 0%, #ede7f6 100%); border: 1px solid #d0d8f0; border-radius: 6px;
-              padding: 1rem 1.2rem; }
-.metric-num { font-size: 1.6rem; font-weight: 600; margin-bottom: 0.1rem; color: #111; }
-.metric-lbl { font-size: 0.75rem; color: #888; margin-top: 0.1rem; }
+st.sidebar.header("Guia de Conectivos")
+st.sidebar.markdown("""
+Use a seguinte sintaxe para as expressões:
+* **Negação:** `~p`
+* **Conjunção (E):** `p & q`
+* **Disjunção (OU):** `p | q`
+* **Condicional:** `p -> q`
+* **Bicondicional:** `p <-> q`
+* *Agora você pode utilizar tanto letras **minúsculas** quanto **maiúsculas** para as variáveis!*
+""")
 
-.badge {
-    display: inline-block;
-    font-size: 0.78rem;
-    background: #f4f4f4;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    padding: 0.2rem 0.6rem;
-    margin: 0.2rem 0.2rem 0.2rem 0;
-    color: #444;
-}
-.badge-senior { border-color: #1a7f4b; color: #1a7f4b; background: #f0faf4; }
-.badge-junior { border-color: #ccc; color: #666; }
-</style>
-""", unsafe_allow_html=True)
+motor = MotorLogico()
 
-# ── Dataset ────────────────────────────────────────────────────────────────────
-data = [
-    (1,"Alice Santos",19,1,True,False),(2,"Bruno Alves",25,4,False,True),
-    (3,"Carla Souza",17,0,True,False),(4,"Daniel Lima",30,7,True,True),
-    (5,"Elena Silva",21,2,False,False),(6,"Fabio Rocha",40,15,True,False),
-    (7,"Gisele Melo",23,3,True,True),(8,"Hugo Peron",18,0,False,False),
-    (9,"Igor Gomes",28,5,False,True),(10,"Julia Costa",22,2,True,False),
-    (11,"Kauê Ramos",20,1,False,False),(12,"Liz Duarte",35,10,True,True),
-    (13,"Marcos Vaz",19,2,True,False),(14,"Nina Sales",24,4,False,True),
-    (15,"Otto Cruz",29,6,True,False),(16,"Paula Dias",17,1,True,False),
-    (17,"Quico Neto",21,0,False,False),(18,"Rosa Lima",45,20,False,True),
-    (19,"Saul Reis",26,5,True,False),(20,"Tati Belo",22,3,False,True),
-    (21,"Uriel Luz",18,0,True,False),(22,"Vitor Paz",31,8,False,True),
-    (23,"Wendy Sol",20,1,True,False),(24,"Xandy Farias",27,4,False,False),
-    (25,"Yuri Zago",23,2,True,True),(26,"Zeca Silva",19,1,False,False),
-    (27,"Alan Terra",33,9,True,True),(28,"Bia Nunes",20,2,False,False),
-    (29,"Caio Mello",17,0,False,False),(30,"Dora Lins",25,3,True,True),
-    (31,"Enzo Ferraz",18,1,False,False),(32,"Fred Góes",42,18,True,False),
-    (33,"Giba Orta",22,2,False,True),(34,"Helô Maia",21,1,True,False),
-    (35,"Isis Vale",24,4,False,False),(36,"Juca Terto",30,6,True,True),
-    (37,"Kelly Pires",19,0,False,False),(38,"Léo Fontes",28,5,True,False),
-    (39,"Mara Jobim",20,2,False,True),(40,"Noel Rosa",50,25,False,False),
-    (41,"Olga Telles",22,3,True,False),(42,"Pepe Lopez",18,1,False,False),
-    (43,"Ruth Lemos",26,4,True,True),(44,"Sara Otoni",23,2,False,False),
-    (45,"Tomé Silva",31,8,True,False),(46,"Una Costa",19,0,False,True),
-    (47,"Valter Zen",28,5,True,True),(48,"Will Smith",24,3,False,False),
-    (49,"Zara Lima",21,1,True,False),(50,"Ari Pires",18,0,False,False),
-]
-
-cols = ["ID", "Nome", "Idade", "Exp", "Técnico", "Inglês"]
-df = pd.DataFrame(data, columns=cols)
-
-# ── Lógica dos desafios ────────────────────────────────────────────────────────
-d1 = df[(df["Idade"] >= 18) & (df["Técnico"] == True)]
-d2 = df[(df["Exp"] >= 3) | (df["Inglês"] == True)]
-d3 = df[(df["Idade"] < 25) & ((df["Técnico"] == True) | (df["Exp"] >= 1))]
-df["Categoria"] = df["Exp"].apply(lambda x: "SÊNIOR" if x > 5 else "JÚNIOR")
-
-# ── Header ─────────────────────────────────────────────────────────────────────
-st.title("DataRecruit AI")
-st.caption("Algoritmo de Seleção Inteligente — Lógica para Computação")
-
-# ── Métricas ───────────────────────────────────────────────────────────────────
-c1, c2, c3, c4, c5 = st.columns(5)
-metrics = [
-    (len(df), "candidatos totais"),
-    (len(d1), "desafio 1"),
-    (len(d2), "desafio 2"),
-    (len(d3), "desafio 3"),
-    (len(df[df["Categoria"] == "SÊNIOR"]), "sênior"),
-]
-for col, (num, lbl) in zip([c1, c2, c3, c4, c5], metrics):
-    with col:
-        st.markdown(
-            f'<div class="metric-box">'
-            f'<div class="metric-num">{num}</div>'
-            f'<div class="metric-lbl">{lbl}</div>'
-            f'</div>',
-            unsafe_allow_html=True
-        )
-
-st.markdown('<hr class="divider">', unsafe_allow_html=True)
-
-# ── Tabs ───────────────────────────────────────────────────────────────────────
-tab_dataset, tab1, tab2, tab3, tab4 = st.tabs([
-    "Dataset", "Desafio 1", "Desafio 2", "Desafio 3", "Desafio 4"
+# Criação das abas para organização do Trabalho Prático
+tab_equiv, tab_inferencia = st.tabs([
+    "Módulo B: Provador de Equivalência",
+    "Módulo C: Motor de Inferência (Validador)"
 ])
 
-def show_table(frame, extra_cols=None):
-    display_cols = ["ID", "Nome", "Idade", "Exp", "Técnico", "Inglês"]
-    if extra_cols:
-        display_cols += extra_cols
-    show = frame[display_cols].copy()
-    show["Técnico"] = show["Técnico"].map({True: "✓", False: "—"})
-    show["Inglês"]  = show["Inglês"].map({True: "✓", False: "—"})
-    st.dataframe(show.reset_index(drop=True), use_container_width=True, hide_index=True)
+# --- ABA: PROVADOR DE EQUIVALÊNCIA ---
+with tab_equiv:
+    st.header("Verificador de Equivalência Lógica")
+    st.write("Insira duas expressões para verificar se elas possuem tabelas-verdade idênticas (Ex: Leis de De Morgan).")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        e1 = st.text_input("Primeira Expressão (Entrada 1):", value="~(p & q)")
+    with col2:
+        e2 = st.text_input("Segunda Expressão (Entrada 2):", value="~p | ~q")
 
-# ── Dataset ────────────────────────────────────────────────────────────────────
-with tab_dataset:
-    st.subheader("50 Candidatos")
-    st.caption("Dados brutos utilizados em todos os desafios.")
-    show_table(df)
+    if st.button("Calcular Equivalência", key="btn_equiv"):
+        if e1 and e2:
+            try:
+                df_resultado, sao_equivalentes = motor.processar_equivalencia(e1, e2)
+                
+                # Exibição do Veredito
+                if sao_equivalentes:
+                    st.success("### 🟩 Resposta: Expressões LOGICAMENTE EQUIVALENTES")
+                else:
+                    st.error("### 🟥 Resposta: Expressões NÃO SÃO EQUIVALENTES")
+                
+                # Renderização da Tabela Verdade Completa
+                st.write("#### Tabela-Verdade Gerada:")
+                st.dataframe(df_resultado, use_container_width=True)
+                
+            except Exception as e:
+                st.error(f"Erro ao processar: {e}")
+        else:
+            st.warning("Por favor, preencha ambas as expressões.")
 
-# ── Desafio 1 ──────────────────────────────────────────────────────────────────
-with tab1:
-    st.subheader("Triagem de Qualificação Técnica")
-    st.caption("Operador **E** — Maioridade legal (idade ≥ 18) **e** curso técnico completo.")
+# --- ABA: MOTOR DE INFERÊNCIA ---
+with tab_inferencia:
+    st.header("Validador de Argumentos Lógicos")
+    st.write("Defina um conjunto de premissas e veja se a conclusão decorre logicamente delas.")
 
-    with st.expander("Ver código", expanded=True):
-        st.code(
-            "aprovados_d1 = [\n"
-            "    c for c in candidatos\n"
-            "    if c['idade'] >= 18 and c['tecnico'] == True\n"
-            "]", language="python"
-        )
+    # Controle dinâmico do número de premissas usando a sessão do Streamlit
+    if 'num_premissas' not in st.session_state:
+        st.session_state.num_premissas = 2
 
-    st.markdown(f"**{len(d1)} aprovados**")
-    show_table(d1)
+    col_btn1, col_btn2, _ = st.columns([1, 1, 4])
+    with col_btn1:
+        if st.button("➕ Adicionar Premissa"):
+            st.session_state.num_premissas += 1
+    with col_btn2:
+        if st.button("➖ Remover Premissa") and st.session_state.num_premissas > 1:
+            st.session_state.num_premissas -= 1
 
-# ── Desafio 2 ──────────────────────────────────────────────────────────────────
-with tab2:
-    st.subheader("Expansão de Talentos Internacionais")
-    st.caption("Operador **OU** — Experiência ≥ 3 anos **ou** domínio da língua inglesa.")
+    # Inputs das premissas dinâmicas
+    premissas_inputs = []
+    st.write("#### Premissas:")
+    
+    # Valores default demonstrativos em minúsculas (Modus Ponens)
+    defaults_premissas = ["p -> q", "p"]
+    
+    for i in range(st.session_state.num_premissas):
+        val_default = defaults_premissas[i] if i < len(defaults_premissas) else ""
+        p_in = st.text_input(f"Premissa {i+1}:", value=val_default, key=f"premissa_{i}")
+        if p_in:
+            premissas_inputs.append(p_in)
 
-    with st.expander("Ver código", expanded=True):
-        st.code(
-            "aprovados_d2 = [\n"
-            "    c for c in candidatos\n"
-            "    if c['exp'] >= 3 or c['ingles'] == True\n"
-            "]", language="python"
-        )
+    st.write("#### Conclusão:")
+    conclusao_input = st.text_input("Conclusão do Argumento:", value="q", key="conclusao")
 
-    st.markdown(f"**{len(d2)} aprovados**")
-    show_table(d2)
-
-# ── Desafio 3 ──────────────────────────────────────────────────────────────────
-with tab3:
-    st.subheader("Filtro de Potencial Jovem")
-    st.caption("Lógica combinada — Idade < 25 **e** (técnico completo **ou** experiência ≥ 1 ano).")
-
-    with st.expander("Ver código", expanded=True):
-        st.code(
-            "aprovados_d3 = [\n"
-            "    c for c in candidatos\n"
-            "    if c['idade'] < 25\n"
-            "    and (c['tecnico'] == True or c['exp'] >= 1)\n"
-            "]", language="python"
-        )
-
-    st.markdown(f"**{len(d3)} aprovados**")
-    show_table(d3)
-
-# ── Desafio 4 ──────────────────────────────────────────────────────────────────
-with tab4:
-    st.subheader("Classificação Salarial")
-    st.caption("Operação condicional — Experiência > 5 anos → **SÊNIOR**, caso contrário → **JÚNIOR**.")
-
-    with st.expander("Ver código", expanded=True):
-        st.code(
-            'for c in candidatos:\n'
-            '    categoria = "SÊNIOR" if c["exp"] > 5 else "JÚNIOR"\n'
-            '    print(f"Nome: {c[\'nome\']} | Categoria: {categoria}")',
-            language="python"
-        )
-
-    col_s, col_j = st.columns(2)
-    senior = df[df["Categoria"] == "SÊNIOR"]
-    junior = df[df["Categoria"] == "JÚNIOR"]
-
-    with col_s:
-        st.markdown(f"**Sênior — {len(senior)} candidatos**")
-        for _, row in senior.iterrows():
-            st.markdown(
-                f'<span class="badge badge-senior">#{row["ID"]:02d} {row["Nome"]} · {row["Exp"]}a</span>',
-                unsafe_allow_html=True
-            )
-
-    with col_j:
-        st.markdown(f"**Júnior — {len(junior)} candidatos**")
-        for _, row in junior.iterrows():
-            st.markdown(
-                f'<span class="badge badge-junior">#{row["ID"]:02d} {row["Nome"]} · {row["Exp"]}a</span>',
-                unsafe_allow_html=True
-            )
+    if st.button("Avaliar Validade do Argumento", key="btn_infer"):
+        if premissas_inputs and conclusao_input:
+            try:
+                df_argumento, eh_valido = motor.processar_argumento(premissas_inputs, conclusao_input)
+                
+                if eh_valido:
+                    st.success("### 🟩 Veredito: O argumento é VÁLIDO (Dedução Legítima)")
+                else:
+                    st.error("### 🟥 Veredito: O argumento é INVÁLIDO (Falácia Lógica)")
