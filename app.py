@@ -16,9 +16,7 @@ class MotorLogico:
 
     def normalizar_expressao(self, expressao: str) -> str:
         """Converte todas as variáveis proposicionais para maiúsculas e remove espaços extras."""
-        # Encontra letras isoladas e as transforma em maiúsculas
         expr = re.sub(r'\b[a-z]\b', lambda m: m.group(0).upper(), expressao)
-        # Remove espaços desnecessários para facilitar o casamento de padrões
         return "".join(expr.split())
 
     def extrair_variaveis(self, expressoes: list) -> list:
@@ -82,13 +80,10 @@ class MotorLogico:
         """Analisa a estrutura das premissas e conclusão para identificar e explicar a regra aplicada."""
         p_norm = [self.normalizar_expressao(p) for p in premissas]
         c_norm = self.normalizar_expressao(conclusao)
-        
-        # Cria um conjunto das premissas para facilitar buscas de ordem independente
         p_set = set(p_norm)
 
         if eh_valido:
             # 1. Tenta identificar MODUS PONENS
-            # Padrão: Se tivermos uma condicional (A->B) e a afirmação do antecedente (A), a conclusão deve ser B.
             for p in p_norm:
                 if "->" in p and "<->" not in p:
                     antecedente, consequente = p.split("->", 1)
@@ -98,7 +93,6 @@ class MotorLogico:
                                f"e o fato `{antecedente}` ocorrer isoladamente, o resultado `{consequente}` obrigatoriamente acontecerá."
 
             # 2. Tenta identificar MODUS TOLLENS
-            # Padrão: Se tivermos uma condicional (A->B) e a negação do consequente (~B), a conclusão deve ser ~A.
             for p in p_norm:
                 if "->" in p and "<->" not in p:
                     antecedente, consequente = p.split("->", 1)
@@ -111,7 +105,6 @@ class MotorLogico:
                                f"que `{consequente}` não aconteceu (`{neg_consequente}`), conclui-se de forma legítima que o seu causador também não ocorreu (`{neg_antecedente}`)."
 
             # 3. Tenta identificar SILOGISMO HIPOTÉTICO
-            # Padrão: Se A->B e B->C, então A->C.
             for p1 in p_norm:
                 if "->" in p1 and "<->" not in p1:
                     a, b = p1.split("->", 1)
@@ -124,7 +117,6 @@ class MotorLogico:
                                        f"estabelece-se uma relação direta de que `{a}` causará `{c}`."
 
             # 4. Tenta identificar SILOGISMO DISJUNTIVO
-            # Padrão: Se A|B e tivermos ~A, a conclusão é B (ou vice-versa).
             for p in p_norm:
                 if "|" in p:
                     partes = p.split("|")
@@ -143,28 +135,26 @@ class MotorLogico:
                    "a análise matemática da tabela-verdade provou que em todas as situações onde todas as suas premissas são Verdadeiras, " \
                    "a sua conclusão também se manteve Verdadeira."
         else:
-            # Tratamento didático para Falácias (Argumentos Inválidos)
+            # Tratamento didático para Falácias
             for p in p_norm:
                 if "->" in p and "<->" not in p:
                     antecedente, consequente = p.split("->", 1)
                     
-                    # Falácia da Afirmação do Consequente (Ex: P->Q, Q. Conclusão: P)
                     if consequente in p_set and c_norm == antecedente:
                         return f"**Falácia Identificada:** Afirmação do Consequente.\n\n" \
                                f"**Por que é inválido?** É um erro comum deduzir que o efeito só possui uma causa única. Mesmo que `{antecedente} -> {consequente}` seja verdade, " \
-                               f"saber que `{consequente}` aconteceu não prova que ele foi causado especificamente por `{antecedente}` (outros fatores não mapeados poderiam gerar `{consequente}`)."
+                               f"saber que `{consequente}` aconteceu não prova que ele foi causado especificamente por `{antecedente}`."
                     
-                    # Falácia da Negação do Antecedente (Ex: P->Q, ~P. Conclusão: ~Q)
                     neg_antecedente = f"~{antecedente}" if not antecedente.startswith("~") else antecedente[1:]
                     neg_consequente = f"~{consequente}" if not consequente.startswith("~") else consequente[1:]
                     if neg_antecedente in p_set and c_norm == neg_consequente:
                         return f"**Falácia Identificada:** Negação do Antecedente.\n\n" \
                                f"**Por que é inválido?** Dizer que `{antecedente}` causa `{consequente}` não significa que `{antecedente}` seja a *única* forma de gerar `{consequente}`. " \
-                               f"Portanto, o fato de `{antecedente}` não ter acontecido (`{neg_antecedente}`) não impede que `{consequente}` aconteça por outros caminhos."
+                               f"Logo, o fato do antecedente não ter ocorrido não impede o consequente de acontecer por outra razão."
 
             return "**Falácia Identificada:** Falácia Lógica Geral.\n\n" \
                    "**Por que é inválido?** A análise computacional detectou linhas críticas (sinalizadas abaixo) onde todas as premissas " \
-                   "inseridas conseguem ser Verdadeiras (V) ao mesmo tempo em que a sua conclusão resulta em Falsa (F). Isso quebra a consistência do argumento."
+                   "inseridas conseguem ser Verdadeiras (V) ao mesmo tempo em que a sua conclusão resulta em Falsa (F). Isso destrói a validade do argumento."
 
     # --- PROCESSAMENTO PARA O MÓDULO C ---
     def processar_argumento(self, premissas: list, conclusao: str):
@@ -182,7 +172,6 @@ class MotorLogico:
             valores_premissas = [self.avaliar_linha(p, contexto) for p in premissas_prep]
             valor_conclusao = self.avaliar_linha(conclusao_prep, contexto)
 
-            # Um argumento é inválido se as premissas forem V e a conclusão for F
             eh_falacia_na_linha = all(valores_premissas) and not valor_conclusao
             if eh_falacia_na_linha:
                 argumento_valido = False
@@ -223,7 +212,7 @@ Use a seguinte sintaxe para as expressões:
 * **Disjunção (OU):** `p | q`
 * **Condicional:** `p -> q`
 * **Bicondicional:** `p <-> q`
-* *Você pode utilizar tanto letras **minúsculas** quanto **maiúsculas** para as variáveis!*
+* *Você pode separar premissas por **vírgulas** em um mesmo campo (ex: `p -> q, p`).*
 """)
 
 motor = MotorLogico()
@@ -267,45 +256,57 @@ with tab_equiv:
 with tab_inferencia:
     st.header("Validador de Argumentos Lógicos com Explicação Didática")
     st.write("Defina um conjunto de premissas e veja se a conclusão decorre logicamente delas, acompanhado do diagnóstico conceitual.")
+    st.caption("💡 **Dica do Professor:** Você pode digitar múltiplas premissas separadas por vírgula em um mesmo campo (Ex: `p -> q, p`).")
 
-    # Controle dinâmico do número de premissas usando a sessão do Streamlit
+    # Controle dinâmico do número de campos de premissas usando a sessão do Streamlit
     if 'num_premissas' not in st.session_state:
-        st.session_state.num_premissas = 2
+        st.session_state.num_premissas = 1  # Alterado para iniciar com 1 para incentivar o uso da vírgula
 
     col_btn1, col_btn2, _ = st.columns([1, 1, 4])
     with col_btn1:
-        if st.button("➕ Adicionar Premissa"):
+        if st.button("➕ Adicionar Linha de Entrada"):
             st.session_state.num_premissas += 1
     with col_btn2:
-        if st.button("➖ Remover Premissa") and st.session_state.num_premissas > 1:
+        if st.button("➖ Remover Linha de Entrada") and st.session_state.num_premissas > 1:
             st.session_state.num_premissas -= 1
 
     # Inputs das premissas dinâmicas
-    premissas_inputs = []
+    premissas_brutas = []
     st.write("#### Premissas:")
     
-    defaults_premissas = ["p -> q", "p"]
+    # Exemplo contendo vírgula para mostrar a nova função ao carregar a página
+    defaults_premissas = ["p -> q, p"]
     
     for i in range(st.session_state.num_premissas):
         val_default = defaults_premissas[i] if i < len(defaults_premissas) else ""
-        p_in = st.text_input(f"Premissa {i+1}:", value=val_default, key=f"premissa_{i}")
-        if p_in:
-            premissas_inputs.append(p_in)
+        p_in = st.text_input(f"Entrada {i+1}:", value=val_default, key=f"premissa_{i}")
+        if p_in.strip():
+            premissas_brutas.append(p_in)
 
     st.write("#### Conclusão:")
     conclusao_input = st.text_input("Conclusão do Argumento:", value="q", key="conclusao")
 
     if st.button("Avaliar Validade do Argumento", key="btn_infer"):
-        if premissas_inputs and conclusao_input:
+        if premissas_brutas and conclusao_input:
             try:
-                df_argumento, eh_valido, explicacao = motor.processar_argumento(premissas_inputs, conclusao_input)
+                # --- LOGICA DE QUEBRA POR VÍRGULA (NOVA ALTERAÇÃO) ---
+                premissas_finais = []
+                for item in premissas_brutas:
+                    # Se houver vírgula, divide a string, limpa os espaços e ignora campos vazios
+                    if "," in item:
+                        sub_premissas = [sub.strip() for sub in item.split(",") if sub.strip()]
+                        premissas_finais.extend(sub_premissas)
+                    else:
+                        premissas_finais.append(item.strip())
+                # -----------------------------------------------------
+
+                df_argumento, eh_valido, explicacao = motor.processar_argumento(premissas_finais, conclusao_input)
                 
                 if eh_valido:
                     st.success("### 🟩 Veredito: O argumento é VÁLIDO (Dedução Legítima)")
                 else:
                     st.error("### 🟥 Veredito: O argumento é INVÁLIDO (Falácia Lógica)")
                 
-                # Renderiza a caixa com a explicação teórica do Silogismo/Argumento
                 st.info(explicacao)
 
                 st.write("#### Análise da Tabela-Verdade do Argumento:")
