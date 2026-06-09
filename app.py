@@ -11,21 +11,33 @@ class MotorLogico:
             ('->', ' <= '),  # P -> Q é equivalente a P <= Q em lógica booleana no Python
             ('~', ' not '),
             ('&', ' and '),
-            ('|', ' or '),
-            ('+', ' or ')   
+            ('|', ' or ')
         ]
 
     def normalizar_expressao(self, expressao: str) -> str:
-        """Converte todas as variáveis proposicionais para maiúsculas, padroniza o '+' para '|' e remove espaços."""
-        expr = re.sub(r'\b[a-z]\b', lambda m: m.group(0).upper(), expressao)
-        expr = expr.replace('+', '|')
+        """Converte variáveis para maiúsculas, padroniza conectivos (+, ., ') e remove espaços."""
+        expr = expressao.strip()
+        
+        # 1. Trata a negação pós-fixada com aspa simples (Ex: p' ou P' vira ~P)
+        # Encontra qualquer letra isolada seguida de ' e coloca o ~ na frente dela
+        expr = re.sub(r'\b([a-zA-Z])\'', r'~\1', expr)
+        
+        # 2. Converte todas as variáveis proposicionais isoladas para maiúsculas
+        expr = re.sub(r'\b[a-z]\b', lambda m: m.group(0).upper(), expr)
+        
+        # 3. Padroniza os conectivos alternativos para os símbolos padrão do motor
+        expr = expr.replace('+', '|')  # Disjunção
+        expr = expr.replace('.', '&')  # Conjunção (Novo: P . Q -> P & Q)
+        
         return "".join(expr.split())
 
     def extrair_variaveis(self, expressoes: list) -> list:
-        """Extrai todas as variáveis proposicionais (letras isoladas, maiúsculas ou minúsculas)."""
+        """Extrai todas as variáveis proposicionais limpas (letras isoladas)."""
         variaveis = set()
         for expr in expressoes:
-            encontradas = re.findall(r'\b[a-zA-Z]\b', expr)
+            # Primeiro normaliza para limpar as aspas da negação antes de buscar as letras
+            expr_norm = self.normalizar_expressao(expr)
+            encontradas = re.findall(r'\b[a-zA-Z]\b', expr_norm)
             variaveis.update([v.upper() for v in encontradas])
         return sorted(list(variaveis))
 
@@ -76,7 +88,7 @@ class MotorLogico:
         df = pd.DataFrame(linhas_tabela)
         return df, equivalentes
 
-    # --- MAPEAMENTO CORRIGIDO DAS REGRAS ---
+    # --- MAPEAMENTO DAS REGRAS DE INFERÊNCIA ---
     def explicar_argumento(self, premissas: list, conclusao: str, eh_valido: bool) -> str:
         """Analisa a estrutura das premissas e conclusão para identificar e explicar a regra aplicada."""
         p_norm = [self.normalizar_expressao(p) for p in premissas]
@@ -112,7 +124,6 @@ class MotorLogico:
                     for p2 in condicionais:
                         if p1 != p2:
                             b2, c = p2.split("->", 1)
-                            # Se há encadeamento clássico e a conclusão valida o fluxo
                             if b == b2 and (c_norm == f"{a}->{c}" or c_norm == p1 or c_norm == p2):
                                 return f"**Regra Identificada:** Silogismo Hipotético (SH)\n\n" \
                                        f"**Explicação:** Trata-se do estudo do encadeamento lógico condicional. Havendo premissas que conectam " \
@@ -152,7 +163,7 @@ class MotorLogico:
                         a, b = p1.split("->", 1)
                         if f"{b}->{a}" in p_set and c_norm == f"{a}<->{b}":
                             return f"**Regra Identificada:** Regras do Bicondicional (BIC)\n\n" \
-                                   f"**Explicação:** Havendo a implicação mútua nas premissas, conclui-se a equivalência lógica exata `{a}<->{b}`."
+                                   f"**Explicação:** Havendo la implicação mútua nas premissas, conclui-se a equivalência lógica exata `{a}<->{b}`."
 
             # 7. SIMPLIFICAÇÃO (S) -> A&B => A
             for p in p_norm:
@@ -163,12 +174,10 @@ class MotorLogico:
                                f"**Explicação:** Uma conjunção (`{p}`) exige que ambas as partes sejam simultaneamente verdadeiras, sendo legítimo extrair qualquer componente."
 
             # 8. SIMPLIFICAÇÃO DISJUNTIVA (S+)
-            # Caso A: Idempotência (A|A => A)
             for p in p_norm:
                 if "|" in p and p.split("|")[0] == p.split("|")[1] and c_norm == p.split("|")[0]:
                     return f"**Regra Identificada:** Simplificação Disjuntiva (S+)\n\n" \
                            f"**Explicação:** A disjunção de uma proposição com ela mesma reduz-se logicamente à própria proposição única."
-            # Caso B: Resolução de opostos disjuntivos (Ex: P|R, P|~R => P)
             disjuncoes = [p for p in p_norm if "|" in p]
             if len(disjuncoes) >= 2:
                 for d1 in disjuncoes:
@@ -180,21 +189,14 @@ class MotorLogico:
                                 partes2 = d2.split("|")
                                 if len(partes2) == 2:
                                     a2, b2 = partes2[0], partes2[1]
-                                    
-                                    # Gera representações das negações para comparação direta
                                     neg_b1 = f"~{b1}" if not b1.startswith("~") else b1[1:]
                                     neg_a1 = f"~{a1}" if not a1.startswith("~") else a1[1:]
-                                    
-                                    # Se a primeira variável for comum e as segundas opostas (Ex: P|R e P|~R)
                                     if a1 == a2 and (b2 == neg_b1 or b1 == f"~{b2}" or b2 == f"~{b1}") and c_norm == a1:
                                         return f"**Regra Identificada:** Simplificação Disjuntiva (S+)\n\n" \
                                                f"**Explicação:** Temos um caso de simplificação por eliminação de literais opostos. Se `{a1}` é pareado de forma disjuntiva tanto com uma variável quanto com a negação exata dela, a variável oposta se anula, restando apenas a afirmação de `{a1}`."
-                                    # Se a segunda variável for comum e as primeiras opostas (Ex: R|P e ~R|P)
                                     if b1 == b2 and (a2 == neg_a1 or a1 == f"~{a2}" or a2 == f"~{a1}") and c_norm == b1:
                                         return f"**Regra Identificada:** Simplificação Disjuntiva (S+)\n\n" \
                                                f"**Explicação:** Simplificação por eliminação de contradição de termos adjacentes. Sobra apenas o termo comum `{b1}`."
-
-            # Caso C: Eliminação clássica por casos / Dilema Especializado
             if len(p_norm) >= 2:
                 for p1 in p_norm:
                     if "&" in p1:
@@ -206,7 +208,7 @@ class MotorLogico:
                                 return f"**Regra Identificada:** Simplificação Disjuntiva (S+)\n\n" \
                                        f"**Explicação:** Se ambos os caminhos alternativos levam ao mesmo resultado, o resultado ocorrerá de qualquer forma."
 
-            # 9. UNIÃO (U) -> Mudado de Conjunção (C) para União (U)
+            # 9. UNIÃO (U) -> A, B => A&B
             if "&" in c_norm:
                 partes_c = c_norm.split("&")
                 if len(partes_c) == 2:
@@ -285,12 +287,12 @@ Mapeamento de Tabelas-Verdade, Equivalências e Motores de Inferência Aplicados
 st.sidebar.header("Guia de Conectivos")
 st.sidebar.markdown("""
 Use a seguinte sintaxe para as expressões:
-* **Negação:** `~p`
-* **Conjunção (E):** `p & q`
+* **Negação:** `~p` ou `p'`
+* **Conjunção (E):** `p & q` ou `p . q`
 * **Disjunção (OU):** `p | q` ou `p + q`
 * **Condicional:** `p -> q`
 * **Bicondicional:** `p <-> q`
-* *Você pode separar premissas por **vírgulas** em um mesmo campo (ex: `p + r, p + ~r`).*
+* *Você pode separar premissas por **vírgulas** em um mesmo campo (ex: `p . q', p`).*
 """)
 
 motor = MotorLogico()
@@ -303,13 +305,13 @@ tab_equiv, tab_inferencia = st.tabs([
 # --- MÓDULO B ---
 with tab_equiv:
     st.header("Verificador de Equivalência Lógica")
-    st.write("Insira duas expressões para verificar se elas possuem tabelas-verdade idênticas (Ex: Leis de De Morgan).")
+    st.write("Insira duas expressões para verificar se elas possuem tabelas-verdade idênticas.")
     
     col1, col2 = st.columns(2)
     with col1:
-        e1 = st.text_input("Primeira Expressão (Entrada 1):", value="~(p & q)")
+        e1 = st.text_input("Primeira Expressão (Entrada 1):", value="(p . q)'")
     with col2:
-        e2 = st.text_input("Segunda Expressão (Entrada 2):", value="~p | ~q")
+        e2 = st.text_input("Segunda Expressão (Entrada 2):", value="p' + q'")
 
     if st.button("Calcular Equivalência", key="btn_equiv"):
         if e1 and e2:
@@ -329,8 +331,8 @@ with tab_equiv:
 # --- MÓDULO C ---
 with tab_inferencia:
     st.header("Validador de Argumentos Lógicos com Explicação Didática")
-    st.write("Defina um conjunto de premissas e veja se a conclusão decorre logicamente delas, acompanhado do diagnóstico conceitual com siglas acadêmicas.")
-    st.caption("💡 **Exemplo de uso:** Você pode digitar `p + r, p + ~r` diretamente na caixa abaixo.")
+    st.write("Defina um conjunto de premissas e veja se a conclusão decorre logicamente delas.")
+    st.caption("💡 **Exemplo de teste:** Você pode digitar `p + r, p + r'` diretamente na caixa abaixo.")
 
     if 'num_premissas' not in st.session_state:
         st.session_state.num_premissas = 1
@@ -346,7 +348,7 @@ with tab_inferencia:
     premissas_brutas = []
     st.write("#### Premissas:")
     
-    defaults_premissas = ["p + r, p + ~r"]
+    defaults_premissas = ["p + r, p + r'"]
     
     for i in range(st.session_state.num_premissas):
         val_default = defaults_premissas[i] if i < len(defaults_premissas) else ""
