@@ -19,7 +19,6 @@ class MotorLogico:
         expr = expressao.strip()
         
         # 1. Trata a negação pós-fixada com aspa simples (Ex: p' ou P' vira ~P)
-        # Encontra qualquer letra isolada seguida de ' e coloca o ~ na frente dela
         expr = re.sub(r'\b([a-zA-Z])\'', r'~\1', expr)
         
         # 2. Converte todas as variáveis proposicionais isoladas para maiúsculas
@@ -27,7 +26,7 @@ class MotorLogico:
         
         # 3. Padroniza os conectivos alternativos para os símbolos padrão do motor
         expr = expr.replace('+', '|')  # Disjunção
-        expr = expr.replace('.', '&')  # Conjunção (Novo: P . Q -> P & Q)
+        expr = expr.replace('.', '&')  # Conjunção (P . Q -> P & Q)
         
         return "".join(expr.split())
 
@@ -35,7 +34,6 @@ class MotorLogico:
         """Extrai todas as variáveis proposicionais limpas (letras isoladas)."""
         variaveis = set()
         for expr in expressoes:
-            # Primeiro normaliza para limpar as aspas da negação antes de buscar as letras
             expr_norm = self.normalizar_expressao(expr)
             encontradas = re.findall(r'\b[a-zA-Z]\b', expr_norm)
             variaveis.update([v.upper() for v in encontradas])
@@ -116,7 +114,7 @@ class MotorLogico:
                                f"**Explicação:** A partir de uma condicional `{antecedente}->{consequente}` e da negação do seu consequente `{neg_consequente}`, " \
                                f"infere-se a negação do seu antecedente `{neg_antecedente}`."
 
-            # 3. SILOGISMO HIPOTÉTICO (SH) -> Encadeamentos de Condicionais (Ex: A->B, B->C)
+            # 3. SILOGISMO HIPOTÉTICO (SH)
             condicionais = [p for p in p_norm if "->" in p and "<->" not in p]
             if len(condicionais) >= 2:
                 for p1 in condicionais:
@@ -163,7 +161,7 @@ class MotorLogico:
                         a, b = p1.split("->", 1)
                         if f"{b}->{a}" in p_set and c_norm == f"{a}<->{b}":
                             return f"**Regra Identificada:** Regras do Bicondicional (BIC)\n\n" \
-                                   f"**Explicação:** Havendo la implicação mútua nas premissas, conclui-se a equivalência lógica exata `{a}<->{b}`."
+                                   f"**Explicação:** Havendo a implicação mútua nas premissas, conclui-se a equivalência lógica exata `{a}<->{b}`."
 
             # 7. SIMPLIFICAÇÃO (S) -> A&B => A
             for p in p_norm:
@@ -284,7 +282,8 @@ Mapeamento de Tabelas-Verdade, Equivalências e Motores de Inferência Aplicados
 *Desenvolvido para a disciplina de Lógica para Computação (Prof. Leandro Ribeiro Fontoura).*
 """)
 
-st.sidebar.header("Guia de Conectivos")
+# --- BARRA LATERAL ESQUERDA (SIDEBAR) ---
+st.sidebar.header("🔌 Guia de Conectivos")
 st.sidebar.markdown("""
 Use a seguinte sintaxe para as expressões:
 * **Negação:** `~p` ou `p'`
@@ -292,9 +291,33 @@ Use a seguinte sintaxe para as expressões:
 * **Disjunção (OU):** `p | q` ou `p + q`
 * **Condicional:** `p -> q`
 * **Bicondicional:** `p <-> q`
-* *Você pode separar premissas por **vírgulas** em um mesmo campo (ex: `p . q', p`).*
+* *Separe premissas por **vírgulas** em uma mesma entrada (ex: `p + r, p + r'`).*
 """)
 
+st.sidebar.markdown("---")
+
+st.sidebar.header("📜 Guia de Regras de Inferência")
+with st.sidebar.expander("Modus Ponens (MP)"):
+    st.markdown("**Premissas:** `p -> q, p` \n\n**Conclusão:** `q`")
+with st.sidebar.expander("Modus Tollens (MT)"):
+    st.markdown("**Premissas:** `p -> q, q'` \n\n**Conclusão:** `p'`")
+with st.sidebar.expander("Silogismo Hipotético (SH)"):
+    st.markdown("**Premissas:** `p -> q, q -> r` \n\n**Conclusão:** `p -> r` *(ou `q -> r`)*")
+with st.sidebar.expander("Silogismo Disjuntivo (SD)"):
+    st.markdown("**Premissas:** `p + q, p'` \n\n**Conclusão:** `q`")
+with st.sidebar.expander("Adição (A)"):
+    st.markdown("**Premissas:** `p` \n\n**Conclusão:** `p + q`")
+with st.sidebar.expander("Regras do Bicondicional (BIC)"):
+    st.markdown("**Premissas:** `p <-> q` \n\n**Conclusão:** `p -> q` \n\n*Ou vice-versa (`p->q, q->p` gerando `p<->q`)*")
+with st.sidebar.expander("Simplificação (S)"):
+    st.markdown("**Premissas:** `p . q` \n\n**Conclusão:** `p`")
+with st.sidebar.expander("Simplificação Disjuntiva (S+)"):
+    st.markdown("**Premissas:** `p + r, p + r'` \n\n**Conclusão:** `p` \n\n*Aceita também Idempotência (`p + p` gerando `p`)*")
+with st.sidebar.expander("União (U)"):
+    st.markdown("**Premissas:** `p, q` \n\n**Conclusão:** `p . q`")
+
+
+# --- CORPO PRINCIPAL DOS MÓDULOS ---
 motor = MotorLogico()
 
 tab_equiv, tab_inferencia = st.tabs([
@@ -332,7 +355,7 @@ with tab_equiv:
 with tab_inferencia:
     st.header("Validador de Argumentos Lógicos com Explicação Didática")
     st.write("Defina um conjunto de premissas e veja se a conclusão decorre logicamente delas.")
-    st.caption("💡 **Exemplo de teste:** Você pode digitar `p + r, p + r'` diretamente na caixa abaixo.")
+    st.caption("💡 **Dica:** Você pode abrir o Guia de Regras ao lado esquerdo para copiar os formatos exatos.")
 
     if 'num_premissas' not in st.session_state:
         st.session_state.num_premissas = 1
