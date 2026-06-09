@@ -18,13 +18,19 @@ class MotorLogico:
         """Converte variáveis para maiúsculas, padroniza conectivos (+, ., ') e remove espaços."""
         expr = expressao.strip()
         
-        # 1. Trata a negação pós-fixada com aspa simples (Ex: p' ou P' vira ~P)
+        # 1. NOVO: Trata a negação com aspa simples APÓS FECHAR PARÊNTESES (Ex: (p.q)' vira ~(p.q))
+        # Usa recursão simples por Regex para inverter a lógica de grupos de parênteses com aspa
+        while ")'" in expr:
+            # Encontra o parênteses correspondente mais próximo para aplicar o ~ na frente
+            expr = re.sub(r'(\((?:[^()]*)\))\'', r'~\1', expr)
+        
+        # 2. Trata a negação pós-fixada de variáveis isoladas (Ex: p' ou P' vira ~P)
         expr = re.sub(r'\b([a-zA-Z])\'', r'~\1', expr)
         
-        # 2. Converte todas as variáveis proposicionais isoladas para maiúsculas
+        # 3. Converte todas as variáveis proposicionais isoladas para maiúsculas
         expr = re.sub(r'\b[a-z]\b', lambda m: m.group(0).upper(), expr)
         
-        # 3. Padroniza os conectivos alternativos para os símbolos padrão do motor
+        # 4. Padroniza os conectivos alternativos para os símbolos padrão do motor
         expr = expr.replace('+', '|')  # Disjunção
         expr = expr.replace('.', '&')  # Conjunção (P . Q -> P & Q)
         
@@ -286,7 +292,7 @@ Mapeamento de Tabelas-Verdade, Equivalências e Motores de Inferência Aplicados
 st.sidebar.header("🔌 Guia de Conectivos")
 st.sidebar.markdown("""
 Use a seguinte sintaxe para as expressões:
-* **Negação:** `~p` ou `p'`
+* **Negação:** `~p`, `p'` ou `(p.q)'`
 * **Conjunção (E):** `p & q` ou `p . q`
 * **Disjunção (OU):** `p | q` ou `p + q`
 * **Condicional:** `p -> q`
@@ -328,7 +334,7 @@ tab_equiv, tab_inferencia = st.tabs([
 # --- MÓDULO B ---
 with tab_equiv:
     st.header("Verificador de Equivalência Lógica")
-    st.write("Insira duas expressões para verificar se elas possuem tabelas-verdade idênticas.")
+    st.write("Insira duas expressões para verificar se elas possuem tabelas-verdade idênticas (Ex: Leis de De Morgan).")
     
     col1, col2 = st.columns(2)
     with col1:
