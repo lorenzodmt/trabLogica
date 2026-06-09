@@ -11,12 +11,14 @@ class MotorLogico:
             ('->', ' <= '),  # P -> Q é equivalente a P <= Q em lógica booleana no Python
             ('~', ' not '),
             ('&', ' and '),
-            ('|', ' or ')
+            ('|', ' or '),
+            ('+', ' or ')   
         ]
 
     def normalizar_expressao(self, expressao: str) -> str:
-        """Converte todas as variáveis proposicionais para maiúsculas e remove espaços extras."""
+        """Converte todas as variáveis proposicionais para maiúsculas, padroniza o '+' para '|' e remove espaços."""
         expr = re.sub(r'\b[a-z]\b', lambda m: m.group(0).upper(), expressao)
+        expr = expr.replace('+', '|')
         return "".join(expr.split())
 
     def extrair_variaveis(self, expressoes: list) -> list:
@@ -49,7 +51,6 @@ class MotorLogico:
         """Mapeia True/False para V/F para exibição acadêmica."""
         return 'V' if valor else 'F'
 
-    # --- PROCESSAMENTO PARA O MÓDULO B ---
     def processar_equivalencia(self, expr1: str, expr2: str):
         variaveis = self.extrair_variaveis([expr1, expr2])
         expr1_prep = self.preparar_expressao(expr1)
@@ -75,7 +76,7 @@ class MotorLogico:
         df = pd.DataFrame(linhas_tabela)
         return df, equivalentes
 
-    # --- MOTOR DE RECONHECIMENTO DE PADRÕES (EXPLICAÇÃO) ---
+    # --- MAPEAMENTO DAS REGRAS SOLICITADAS ---
     def explicar_argumento(self, premissas: list, conclusao: str, eh_valido: bool) -> str:
         """Analisa a estrutura das premissas e conclusão para identificar e explicar a regra aplicada."""
         p_norm = [self.normalizar_expressao(p) for p in premissas]
@@ -83,28 +84,27 @@ class MotorLogico:
         p_set = set(p_norm)
 
         if eh_valido:
-            # 1. Tenta identificar MODUS PONENS
+            # 1. MODUS PONENS (MP) -> A->B, A => B
             for p in p_norm:
                 if "->" in p and "<->" not in p:
                     antecedente, consequente = p.split("->", 1)
                     if antecedente in p_set and c_norm == consequente:
-                        return f"**Regra identificada:** Modus Ponens (Afirmação do Antecedente).\n\n" \
-                               f"**Por que é válido?** A estrutura lógica diz que sempre que a regra `{antecedente} -> {consequente}` for verdadeira, " \
-                               f"e o fato `{antecedente}` ocorrer isoladamente, o resultado `{consequente}` obrigatoriamente acontecerá."
+                        return f"**Regra Identificada:** Modus Ponens (MP)\n\n" \
+                               f"**Explicação:** A partir de uma condicional `{antecedente}->{consequente}` e da afirmação do seu antecedente `{antecedente}`, " \
+                               f"infere-se legitimamente o consequente `{consequente}`."
 
-            # 2. Tenta identificar MODUS TOLLENS
+            # 2. MODUS TOLLENS (MT) -> A->B, ~B => ~A
             for p in p_norm:
                 if "->" in p and "<->" not in p:
                     antecedente, consequente = p.split("->", 1)
                     neg_consequente = f"~{consequente}" if not consequente.startswith("~") else consequente[1:]
                     neg_antecedente = f"~{antecedente}" if not antecedente.startswith("~") else antecedente[1:]
-                    
                     if neg_consequente in p_set and c_norm == neg_antecedente:
-                        return f"**Regra identificada:** Modus Tollens (Negação do Consequente).\n\n" \
-                               f"**Por que é válido?** A regra diz que `{antecedente}` implica em `{consequente}`. Como a premissa informa " \
-                               f"que `{consequente}` não aconteceu (`{neg_consequente}`), conclui-se de forma legítima que o seu causador também não ocorreu (`{neg_antecedente}`)."
+                        return f"**Regra Identificada:** Modus Tollens (MT)\n\n" \
+                               f"**Explicação:** A partir de uma condicional `{antecedente}->{consequente}` e da negação do seu consequente `{neg_consequente}`, " \
+                               f"infere-se a negação do seu antecedente `{neg_antecedente}`."
 
-            # 3. Tenta identificar SILOGISMO HIPOTÉTICO
+            # 3. SILOGISMO HIPOTÉTICO (SH) -> A->B, B->C => A->C
             for p1 in p_norm:
                 if "->" in p1 and "<->" not in p1:
                     a, b = p1.split("->", 1)
@@ -112,11 +112,11 @@ class MotorLogico:
                         if "->" in p2 and "<->" not in p2 and p1 != p2:
                             b2, c = p2.split("->", 1)
                             if b == b2 and c_norm == f"{a}->{c}":
-                                return f"**Regra identificada:** Silogismo Hipotético (Regra da Cadeia).\n\n" \
-                                       f"**Por que é válido?** Há um encadeamento lógico de causa e efeito. Se `{a}` leva a `{b}` e `{b}` leva a `{c}`, " \
-                                       f"estabelece-se uma relação direta de que `{a}` causará `{c}`."
+                                return f"**Regra Identificada:** Silogismo Hipotético (SH)\n\n" \
+                                       f"**Explicação:** Se uma proposição `{a}` implica em `{b}`, e `{b}` implica em `{c}`, " \
+                                       f"estabelece-se uma relação transitiva direta onde `{a}` implica em `{c}`."
 
-            # 4. Tenta identificar SILOGISMO DISJUNTIVO
+            # 4. SILOGISMO DISJUNTIVO (SD) -> A|B, ~A => B
             for p in p_norm:
                 if "|" in p:
                     partes = p.split("|")
@@ -124,39 +124,93 @@ class MotorLogico:
                         a, b = partes[0], partes[1]
                         neg_a = f"~{a}" if not a.startswith("~") else a[1:]
                         neg_b = f"~{b}" if not b.startswith("~") else b[1:]
-                        
                         if (neg_a in p_set and c_norm == b) or (neg_b in p_set and c_norm == a):
-                            return f"**Regra identificada:** Silogismo Disjuntivo (Eliminação por Alternativa).\n\n" \
-                                   f"**Por que é válido?** A premissa inicial garante que pelo menos uma das opções é verdadeira (`{a}` ou `{b}`). " \
-                                   f"Ao eliminar uma das alternativas através da outra premissa, resta obrigatoriamente aceitar a outra como verdade."
+                            return f"**Regra Identificada:** Silogismo Disjuntivo (SD)\n\n" \
+                                   f"**Explicação:** Havendo uma disjunção `{a}|{b}` (onde pelo menos uma alternativa é verdadeira) e sabendo " \
+                                   f"que uma delas foi negada, conclui-se necessariamente a outra."
 
-            return "**Regra identificada:** Dedução Válida Geral.\n\n" \
-                   "**Por que é válido?** Embora este argumento não se encaixe perfeitamente em um único nome de silogismo simples clássico, " \
-                   "a análise matemática da tabela-verdade provou que em todas as situações onde todas as suas premissas são Verdadeiras, " \
-                   "a sua conclusão também se manteve Verdadeira."
+            # 5. ADIÇÃO (A) -> A => A|B
+            if "|" in c_norm:
+                partes_c = c_norm.split("|")
+                if any(p in partes_c for p in p_norm):
+                    return f"**Regra Identificada:** Adição (A)\n\n" \
+                           f"**Explicação:** Como uma das proposições já é verdadeira pelas premissas, a introdução de uma disjunção " \
+                           f"('OU') com qualquer outra variável mantém o argumento inteiramente válido."
+
+            # 6. REGRAS DO BICONDICIONAL (BIC) -> A<->B => A->B (ou vice-versa)
+            for p in p_norm:
+                if "<->" in p:
+                    a, b = p.split("<->", 1)
+                    if c_norm in (f"{a}->{b}", f"{b}->{a}"):
+                        return f"**Regra Identificada:** Regras do Bicondicional (BIC)\n\n" \
+                               f"**Explicação:** A dupla implicação `{a}<->{b}` significa que tanto `{a}->{b}` quanto `{b}->{a}` são simultaneamente verdadeiros, " \
+                               f"permitindo extrair qualquer uma das condicionais de forma isolada."
+            if "->" in c_norm and len(p_norm) >= 2:
+                # Caso inverso: p->q e q->p gerando p<->q
+                for p1 in p_norm:
+                    if "->" in p1 and "<->" not in p1:
+                        a, b = p1.split("->", 1)
+                        if f"{b}->{a}" in p_set and c_norm == f"{a}<->{b}":
+                            return f"**Regra Identificada:** Regras do Bicondicional (BIC)\n\n" \
+                                   f"**Explicação:** Havendo a implicação mútua nas premissas (se `{a}` então `{b}`, e se `{b}` então `{a}`), " \
+                                   f"conclui-se a equivalência lógica exata `{a}<->{b}`."
+
+            # 7. SIMPLIFICAÇÃO (S) -> A&B => A
+            for p in p_norm:
+                if "&" in p:
+                    partes_p = p.split("&")
+                    if c_norm in partes_p:
+                        return f"**Regra Identificada:** Simplificação (S)\n\n" \
+                               f"**Explicação:** Uma conjunção (`{p}`) exige que ambas as partes sejam simultaneamente verdadeiras, " \
+                               f"sendo legítimo extrair qualquer uma das componentes separadamente."
+
+            # 8. SIMPLIFICAÇÃO DISJUNTIVA (S+) -> A|A => A ou (A->B)&(C->B), A|C => B
+            for p in p_norm:
+                if "|" in p and p.split("|")[0] == p.split("|")[1] and c_norm == p.split("|")[0]:
+                    return f"**Regra Identificada:** Simplificação Disjuntiva (S+) [Idempotência]\n\n" \
+                           f"**Explicação:** A disjunção de uma proposição com ela mesma `{p}` reduz-se logicamente à própria proposição única."
+            # Caso clássico de eliminação por casos (Dilema Construtivo Especializado)
+            if len(p_norm) >= 2:
+                for p1 in p_norm:
+                    if "&" in p1:  # Estrutura (A->B)&(C->B)
+                        partes = p1.split("&")
+                        if "->" in partes[0] and "->" in partes[1]:
+                            a, b1 = partes[0].split("->", 1)
+                            c, b2 = partes[1].split("->", 1)
+                            if b1 == b2 and b1 == c_norm and (f"{a}|{c}" in p_set or f"{c}|{a}" in p_set):
+                                return f"**Regra Identificada:** Simplificação Disjuntiva (S+) [Eliminação por Casos]\n\n" \
+                                       f"**Explicação:** Se ambos os caminhos alternativos (`{a}` ou `{c}`) levam inevitavelmente ao mesmo resultado `{c_norm}`, " \
+                                       f"então o resultado ocorrerá de qualquer forma."
+
+            # 9. CONJUNÇÃO (C) -> A, B => A&B
+            if "&" in c_norm:
+                partes_c = c_norm.split("&")
+                if len(partes_c) == 2:
+                    c1, c2 = partes_c[0], partes_c[1]
+                    if (c1 in p_set or any(c1 in p and "&" in p for p in p_norm)) and \
+                       (c2 in p_set or any(c2 in p and "&" in p for p in p_norm)):
+                        return f"**Regra Identificada:** Conjunção (C)\n\n" \
+                               f"**Explicação:** Se duas premissas são verdadeiras isoladamente no sistema, elas podem ser unidas através do conectivo 'E' (`&`)."
+
+            return "**Regra Identificada:** Dedução Válida Geral.\n\n" \
+                   "**Explicação:** O argumento foi validado com sucesso através da matriz da tabela-verdade, embora represente uma composição complexa de passos dedutivos."
         else:
-            # Tratamento didático para Falácias
+            # Tratamento para Falácias
             for p in p_norm:
                 if "->" in p and "<->" not in p:
                     antecedente, consequente = p.split("->", 1)
-                    
                     if consequente in p_set and c_norm == antecedente:
                         return f"**Falácia Identificada:** Afirmação do Consequente.\n\n" \
-                               f"**Por que é inválido?** É um erro comum deduzir que o efeito só possui uma causa única. Mesmo que `{antecedente} -> {consequente}` seja verdade, " \
-                               f"saber que `{consequente}` aconteceu não prova que ele foi causado especificamente por `{antecedente}`."
-                    
+                               f"**Por que é inválido?** Mesmo que `{antecedente} -> {consequente}` seja verdade, saber que o efeito `{consequente}` ocorreu não garante que ele foi desencadeado especificamente por `{antecedente}`."
                     neg_antecedente = f"~{antecedente}" if not antecedente.startswith("~") else antecedente[1:]
                     neg_consequente = f"~{consequente}" if not consequente.startswith("~") else consequente[1:]
                     if neg_antecedente in p_set and c_norm == neg_consequente:
                         return f"**Falácia Identificada:** Negação do Antecedente.\n\n" \
-                               f"**Por que é inválido?** Dizer que `{antecedente}` causa `{consequente}` não significa que `{antecedente}` seja a *única* forma de gerar `{consequente}`. " \
-                               f"Logo, o fato do antecedente não ter ocorrido não impede o consequente de acontecer por outra razão."
+                               f"**Por que é inválido?** A ausência da causa primitiva `{neg_antecedente}` não impede que o efeito ocorra por outras vias não mapeadas."
 
             return "**Falácia Identificada:** Falácia Lógica Geral.\n\n" \
-                   "**Por que é inválido?** A análise computacional detectou linhas críticas (sinalizadas abaixo) onde todas as premissas " \
-                   "inseridas conseguem ser Verdadeiras (V) ao mesmo tempo em que a sua conclusão resulta em Falsa (F). Isso destrói a validade do argumento."
+                   "**Por que é inválido?** A tabela-verdade provou computacionalmente a existência de linhas inconsistentes onde as premissas são Verdadeiras e a conclusão é Falsa."
 
-    # --- PROCESSAMENTO PARA O MÓDULO C ---
     def processar_argumento(self, premissas: list, conclusao: str):
         todas_expressoes = premissas + [conclusao]
         variaveis = self.extrair_variaveis(todas_expressoes)
@@ -209,21 +263,20 @@ st.sidebar.markdown("""
 Use a seguinte sintaxe para as expressões:
 * **Negação:** `~p`
 * **Conjunção (E):** `p & q`
-* **Disjunção (OU):** `p | q`
+* **Disjunção (OU):** `p | q` ou `p + q`
 * **Condicional:** `p -> q`
 * **Bicondicional:** `p <-> q`
-* *Você pode separar premissas por **vírgulas** em um mesmo campo (ex: `p -> q, p`).*
+* *Você pode separar premissas por **vírgulas** em um mesmo campo (ex: `p + q, ~p`).*
 """)
 
 motor = MotorLogico()
 
-# Criação das abas para organização do Trabalho Prático
 tab_equiv, tab_inferencia = st.tabs([
     "Módulo B: Provador de Equivalência",
     "Módulo C: Motor de Inferência (Validador)"
 ])
 
-# --- ABA: PROVADOR DE EQUIVALÊNCIA ---
+# --- MÓDULO B ---
 with tab_equiv:
     st.header("Verificador de Equivalência Lógica")
     st.write("Insira duas expressões para verificar se elas possuem tabelas-verdade idênticas (Ex: Leis de De Morgan).")
@@ -238,29 +291,25 @@ with tab_equiv:
         if e1 and e2:
             try:
                 df_resultado, sao_equivalentes = motor.processar_equivalencia(e1, e2)
-                
                 if sao_equivalentes:
                     st.success("### 🟩 Resposta: Expressões LOGICAMENTE EQUIVALENTES")
                 else:
                     st.error("### 🟥 Resposta: Expressões NÃO SÃO EQUIVALENTES")
-                
                 st.write("#### Tabela-Verdade Gerada:")
                 st.dataframe(df_resultado, use_container_width=True)
-                
             except Exception as e:
                 st.error(f"Erro ao processar: {e}")
         else:
             st.warning("Por favor, preencha ambas as expressões.")
 
-# --- ABA: MOTOR DE INFERÊNCIA ---
+# --- MÓDULO C ---
 with tab_inferencia:
     st.header("Validador de Argumentos Lógicos com Explicação Didática")
-    st.write("Defina um conjunto de premissas e veja se a conclusão decorre logicamente delas, acompanhado do diagnóstico conceitual.")
-    st.caption("💡 **Dica do Professor:** Você pode digitar múltiplas premissas separadas por vírgula em um mesmo campo (Ex: `p -> q, p`).")
+    st.write("Defina um conjunto de premissas e veja se a conclusão decorre logicamente delas, acompanhado do diagnóstico conceitual com siglas acadêmicas.")
+    st.caption("💡 **Exemplo de uso:** Você pode digitar `p + q, ~p` diretamente na caixa abaixo.")
 
-    # Controle dinâmico do número de campos de premissas usando a sessão do Streamlit
     if 'num_premissas' not in st.session_state:
-        st.session_state.num_premissas = 1  # Alterado para iniciar com 1 para incentivar o uso da vírgula
+        st.session_state.num_premissas = 1
 
     col_btn1, col_btn2, _ = st.columns([1, 1, 4])
     with col_btn1:
@@ -270,12 +319,10 @@ with tab_inferencia:
         if st.button("➖ Remover Linha de Entrada") and st.session_state.num_premissas > 1:
             st.session_state.num_premissas -= 1
 
-    # Inputs das premissas dinâmicas
     premissas_brutas = []
     st.write("#### Premissas:")
     
-    # Exemplo contendo vírgula para mostrar a nova função ao carregar a página
-    defaults_premissas = ["p -> q, p"]
+    defaults_premissas = ["p + q, ~p"]
     
     for i in range(st.session_state.num_premissas):
         val_default = defaults_premissas[i] if i < len(defaults_premissas) else ""
@@ -289,16 +336,13 @@ with tab_inferencia:
     if st.button("Avaliar Validade do Argumento", key="btn_infer"):
         if premissas_brutas and conclusao_input:
             try:
-                # --- LOGICA DE QUEBRA POR VÍRGULA (NOVA ALTERAÇÃO) ---
                 premissas_finais = []
                 for item in premissas_brutas:
-                    # Se houver vírgula, divide a string, limpa os espaços e ignora campos vazios
                     if "," in item:
                         sub_premissas = [sub.strip() for sub in item.split(",") if sub.strip()]
                         premissas_finais.extend(sub_premissas)
                     else:
                         premissas_finais.append(item.strip())
-                # -----------------------------------------------------
 
                 df_argumento, eh_valido, explicacao = motor.processar_argumento(premissas_finais, conclusao_input)
                 
