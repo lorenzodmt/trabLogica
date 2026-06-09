@@ -76,7 +76,7 @@ class MotorLogico:
         df = pd.DataFrame(linhas_tabela)
         return df, equivalentes
 
-    # --- MAPEAMENTO DAS REGRAS SOLICITADAS ---
+    # --- MAPEAMENTO CORRIGIDO DAS REGRAS ---
     def explicar_argumento(self, premissas: list, conclusao: str, eh_valido: bool) -> str:
         """Analisa a estrutura das premissas e conclusão para identificar e explicar a regra aplicada."""
         p_norm = [self.normalizar_expressao(p) for p in premissas]
@@ -104,17 +104,19 @@ class MotorLogico:
                                f"**Explicação:** A partir de uma condicional `{antecedente}->{consequente}` e da negação do seu consequente `{neg_consequente}`, " \
                                f"infere-se a negação do seu antecedente `{neg_antecedente}`."
 
-            # 3. SILOGISMO HIPOTÉTICO (SH) -> A->B, B->C => A->C
-            for p1 in p_norm:
-                if "->" in p1 and "<->" not in p1:
+            # 3. SILOGISMO HIPOTÉTICO (SH) -> Encadeamentos de Condicionais (Ex: A->B, B->C)
+            condicionais = [p for p in p_norm if "->" in p and "<->" not in p]
+            if len(condicionais) >= 2:
+                for p1 in condicionais:
                     a, b = p1.split("->", 1)
-                    for p2 in p_norm:
-                        if "->" in p2 and "<->" not in p2 and p1 != p2:
+                    for p2 in condicionais:
+                        if p1 != p2:
                             b2, c = p2.split("->", 1)
-                            if b == b2 and c_norm == f"{a}->{c}":
+                            # Se há encadeamento clássico e a conclusão valida o fluxo
+                            if b == b2 and (c_norm == f"{a}->{c}" or c_norm == p1 or c_norm == p2):
                                 return f"**Regra Identificada:** Silogismo Hipotético (SH)\n\n" \
-                                       f"**Explicação:** Se uma proposição `{a}` implica em `{b}`, e `{b}` implica em `{c}`, " \
-                                       f"estabelece-se uma relação transitiva direta onde `{a}` implica em `{c}`."
+                                       f"**Explicação:** Trata-se do estudo do encadeamento lógico condicional. Havendo premissas que conectam " \
+                                       f"proposições em cadeia estruturada de causa e efeito, a validade do fluxo condicional é garantida."
 
             # 4. SILOGISMO DISJUNTIVO (SD) -> A|B, ~A => B
             for p in p_norm:
@@ -127,7 +129,7 @@ class MotorLogico:
                         if (neg_a in p_set and c_norm == b) or (neg_b in p_set and c_norm == a):
                             return f"**Regra Identificada:** Silogismo Disjuntivo (SD)\n\n" \
                                    f"**Explicação:** Havendo uma disjunção `{a}|{b}` (onde pelo menos uma alternativa é verdadeira) e sabendo " \
-                                   f"que uma delas foi negada, conclui-se necessariamente a outra."
+                                   f"que uma delas foi eliminada por sua negação, conclui-se necessariamente a outra."
 
             # 5. ADIÇÃO (A) -> A => A|B
             if "|" in c_norm:
@@ -143,17 +145,14 @@ class MotorLogico:
                     a, b = p.split("<->", 1)
                     if c_norm in (f"{a}->{b}", f"{b}->{a}"):
                         return f"**Regra Identificada:** Regras do Bicondicional (BIC)\n\n" \
-                               f"**Explicação:** A dupla implicação `{a}<->{b}` significa que tanto `{a}->{b}` quanto `{b}->{a}` são simultaneamente verdadeiros, " \
-                               f"permitindo extrair qualquer uma das condicionais de forma isolada."
+                               f"**Explicação:** A dupla implicação `{a}<->{b}` significa que tanto `{a}->{b}` quanto `{b}->{a}` são verdadeiros."
             if "->" in c_norm and len(p_norm) >= 2:
-                # Caso inverso: p->q e q->p gerando p<->q
                 for p1 in p_norm:
                     if "->" in p1 and "<->" not in p1:
                         a, b = p1.split("->", 1)
                         if f"{b}->{a}" in p_set and c_norm == f"{a}<->{b}":
                             return f"**Regra Identificada:** Regras do Bicondicional (BIC)\n\n" \
-                                   f"**Explicação:** Havendo a implicação mútua nas premissas (se `{a}` então `{b}`, e se `{b}` então `{a}`), " \
-                                   f"conclui-se a equivalência lógica exata `{a}<->{b}`."
+                                   f"**Explicação:** Havendo a implicação mútua nas premissas, conclui-se a equivalência lógica exata `{a}<->{b}`."
 
             # 7. SIMPLIFICAÇÃO (S) -> A&B => A
             for p in p_norm:
@@ -161,36 +160,61 @@ class MotorLogico:
                     partes_p = p.split("&")
                     if c_norm in partes_p:
                         return f"**Regra Identificada:** Simplificação (S)\n\n" \
-                               f"**Explicação:** Uma conjunção (`{p}`) exige que ambas as partes sejam simultaneamente verdadeiras, " \
-                               f"sendo legítimo extrair qualquer uma das componentes separadamente."
+                               f"**Explicação:** Uma conjunção (`{p}`) exige que ambas as partes sejam simultaneamente verdadeiras, sendo legítimo extrair qualquer componente."
 
-            # 8. SIMPLIFICAÇÃO DISJUNTIVA (S+) -> A|A => A ou (A->B)&(C->B), A|C => B
+            # 8. SIMPLIFICAÇÃO DISJUNTIVA (S+)
+            # Caso A: Idempotência (A|A => A)
             for p in p_norm:
                 if "|" in p and p.split("|")[0] == p.split("|")[1] and c_norm == p.split("|")[0]:
-                    return f"**Regra Identificada:** Simplificação Disjuntiva (S+) [Idempotência]\n\n" \
-                           f"**Explicação:** A disjunção de uma proposição com ela mesma `{p}` reduz-se logicamente à própria proposição única."
-            # Caso clássico de eliminação por casos (Dilema Construtivo Especializado)
+                    return f"**Regra Identificada:** Simplificação Disjuntiva (S+)\n\n" \
+                           f"**Explicação:** A disjunção de uma proposição com ela mesma reduz-se logicamente à própria proposição única."
+            # Caso B: Resolução de opostos disjuntivos (Ex: P|R, P|~R => P)
+            disjuncoes = [p for p in p_norm if "|" in p]
+            if len(disjuncoes) >= 2:
+                for d1 in disjuncoes:
+                    partes1 = d1.split("|")
+                    if len(partes1) == 2:
+                        a1, b1 = partes1[0], partes1[1]
+                        for d2 in disjuncoes:
+                            if d1 != d2:
+                                partes2 = d2.split("|")
+                                if len(partes2) == 2:
+                                    a2, b2 = partes2[0], partes2[1]
+                                    
+                                    # Gera representações das negações para comparação direta
+                                    neg_b1 = f"~{b1}" if not b1.startswith("~") else b1[1:]
+                                    neg_a1 = f"~{a1}" if not a1.startswith("~") else a1[1:]
+                                    
+                                    # Se a primeira variável for comum e as segundas opostas (Ex: P|R e P|~R)
+                                    if a1 == a2 and (b2 == neg_b1 or b1 == f"~{b2}" or b2 == f"~{b1}") and c_norm == a1:
+                                        return f"**Regra Identificada:** Simplificação Disjuntiva (S+)\n\n" \
+                                               f"**Explicação:** Temos um caso de simplificação por eliminação de literais opostos. Se `{a1}` é pareado de forma disjuntiva tanto com uma variável quanto com a negação exata dela, a variável oposta se anula, restando apenas a afirmação de `{a1}`."
+                                    # Se a segunda variável for comum e as primeiras opostas (Ex: R|P e ~R|P)
+                                    if b1 == b2 and (a2 == neg_a1 or a1 == f"~{a2}" or a2 == f"~{a1}") and c_norm == b1:
+                                        return f"**Regra Identificada:** Simplificação Disjuntiva (S+)\n\n" \
+                                               f"**Explicação:** Simplificação por eliminação de contradição de termos adjacentes. Sobra apenas o termo comum `{b1}`."
+
+            # Caso C: Eliminação clássica por casos / Dilema Especializado
             if len(p_norm) >= 2:
                 for p1 in p_norm:
-                    if "&" in p1:  # Estrutura (A->B)&(C->B)
+                    if "&" in p1:
                         partes = p1.split("&")
                         if "->" in partes[0] and "->" in partes[1]:
                             a, b1 = partes[0].split("->", 1)
                             c, b2 = partes[1].split("->", 1)
                             if b1 == b2 and b1 == c_norm and (f"{a}|{c}" in p_set or f"{c}|{a}" in p_set):
-                                return f"**Regra Identificada:** Simplificação Disjuntiva (S+) [Eliminação por Casos]\n\n" \
-                                       f"**Explicação:** Se ambos os caminhos alternativos (`{a}` ou `{c}`) levam inevitavelmente ao mesmo resultado `{c_norm}`, " \
-                                       f"então o resultado ocorrerá de qualquer forma."
+                                return f"**Regra Identificada:** Simplificação Disjuntiva (S+)\n\n" \
+                                       f"**Explicação:** Se ambos os caminhos alternativos levam ao mesmo resultado, o resultado ocorrerá de qualquer forma."
 
-            # 9. CONJUNÇÃO (C) -> A, B => A&B
+            # 9. UNIÃO (U) -> Mudado de Conjunção (C) para União (U)
             if "&" in c_norm:
                 partes_c = c_norm.split("&")
                 if len(partes_c) == 2:
                     c1, c2 = partes_c[0], partes_c[1]
                     if (c1 in p_set or any(c1 in p and "&" in p for p in p_norm)) and \
                        (c2 in p_set or any(c2 in p and "&" in p for p in p_norm)):
-                        return f"**Regra Identificada:** Conjunção (C)\n\n" \
-                               f"**Explicação:** Se duas premissas são verdadeiras isoladamente no sistema, elas podem ser unidas através do conectivo 'E' (`&`)."
+                        return f"**Regra Identificada:** União (U)\n\n" \
+                               f"**Explicação:** Se duas premissas são verdadeiras isoladamente ou estão provadas no sistema, elas podem ser unidas através do conectivo 'E' (`&`)."
 
             return "**Regra Identificada:** Dedução Válida Geral.\n\n" \
                    "**Explicação:** O argumento foi validado com sucesso através da matriz da tabela-verdade, embora represente uma composição complexa de passos dedutivos."
@@ -266,7 +290,7 @@ Use a seguinte sintaxe para as expressões:
 * **Disjunção (OU):** `p | q` ou `p + q`
 * **Condicional:** `p -> q`
 * **Bicondicional:** `p <-> q`
-* *Você pode separar premissas por **vírgulas** em um mesmo campo (ex: `p + q, ~p`).*
+* *Você pode separar premissas por **vírgulas** em um mesmo campo (ex: `p + r, p + ~r`).*
 """)
 
 motor = MotorLogico()
@@ -306,7 +330,7 @@ with tab_equiv:
 with tab_inferencia:
     st.header("Validador de Argumentos Lógicos com Explicação Didática")
     st.write("Defina um conjunto de premissas e veja se a conclusão decorre logicamente delas, acompanhado do diagnóstico conceitual com siglas acadêmicas.")
-    st.caption("💡 **Exemplo de uso:** Você pode digitar `p + q, ~p` diretamente na caixa abaixo.")
+    st.caption("💡 **Exemplo de uso:** Você pode digitar `p + r, p + ~r` diretamente na caixa abaixo.")
 
     if 'num_premissas' not in st.session_state:
         st.session_state.num_premissas = 1
@@ -322,7 +346,7 @@ with tab_inferencia:
     premissas_brutas = []
     st.write("#### Premissas:")
     
-    defaults_premissas = ["p + q, ~p"]
+    defaults_premissas = ["p + r, p + ~r"]
     
     for i in range(st.session_state.num_premissas):
         val_default = defaults_premissas[i] if i < len(defaults_premissas) else ""
@@ -331,7 +355,7 @@ with tab_inferencia:
             premissas_brutas.append(p_in)
 
     st.write("#### Conclusão:")
-    conclusao_input = st.text_input("Conclusão do Argumento:", value="q", key="conclusao")
+    conclusao_input = st.text_input("Conclusão do Argumento:", value="p", key="conclusao")
 
     if st.button("Avaliar Validade do Argumento", key="btn_infer"):
         if premissas_brutas and conclusao_input:
